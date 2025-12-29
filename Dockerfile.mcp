@@ -19,8 +19,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-COPY requirements-mcp.txt .
-RUN pip install --no-cache-dir -r requirements-mcp.txt
+# Note: Ansible playbook renames requirements-mcp.txt to requirements.txt before build
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/
