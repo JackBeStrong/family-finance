@@ -1,0 +1,694 @@
+#!/usr/bin/env python3
+"""
+Family Finance MCP Server
+
+A Model Context Protocol (MCP) server that exposes PostgreSQL transaction data
+to AI agents. Supports both SSE (HTTP) transport for remote access and stdio
+transport for local development.
+
+Usage:
+    # SSE mode (for remote/production)
+    python -m src.mcp_server.server --transport sse --port 8080
+    
+    # Stdio mode (for local development)
+    python -m src.mcp_server.server --transport stdio
+"""
+
+import argparse
+import asyncio
+import json
+import logging
+import os
+import sys
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Optional
+
+# MCP SDK imports
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+
+# Database imports - reuse existing repository
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from src.database.postgres_repository import PostgresRepository
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder that handles Decimal types."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, (date, datetime)):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def json_dumps(obj: Any) -> str:
+    """JSON serialize with Decimal support."""
+    return json.dumps(obj, cls=DecimalEncoder, indent=2)
+
+
+class FamilyFinanceMCP:
+    """
+    MCP Server for Family Finance database.
+    
+    Exposes tools for querying transaction data:
+    - query_transactions: Flexible filtered queries
+    - get_monthly_summary: Income/expenses totals
+    - get_spending_by_category: Category breakdown
+    - get_transactions_by_bank: Per-bank/account totals
+    - get_top_merchants: Top spending merchants
+    - get_month_comparison: Month-over-month comparison
+    - execute_sql: Raw SELECT queries (read-only)
+    """
+    
+    def __init__(self):
+        self.server = Server("family-finance-mcp")
+        self.db: Optional[PostgresRepository] = None
+        self._setup_tools()
+    
+    def _get_db(self) -> PostgresRepository:
+        """Get or create database connection."""
+        if self.db is None:
+            self.db = PostgresRepository()
+        return self.db
+    
+    def _setup_tools(self):
+        """Register all MCP tools."""
+        
+        @self.server.list_tools()
+        async def list_tools() -> list[Tool]:
+            return [
+                Tool(
+                    name="query_transactions",
+                    description="Query transactions with optional filters. Returns transaction details.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "description": "Start date (YYYY-MM-DD)"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "End date (YYYY-MM-DD)"
+                            },
+                            "bank_source": {
+                                "type": "string",
+                                "description": "Filter by bank (westpac, anz, cba, bankwest, macquarie)"
+                            },
+                            "account_id": {
+                                "type": "string",
+                                "description": "Filter by account ID"
+                            },
+                            "min_amount": {
+                                "type": "number",
+                                "description": "Minimum amount (use negative for expenses)"
+                            },
+                            "max_amount": {
+                                "type": "number",
+                                "description": "Maximum amount"
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Filter by category"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum results (default 100)"
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="get_monthly_summary",
+                    description="Get total income, expenses, and net for a specific month.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "year": {
+                                "type": "integer",
+                                "description": "Year (e.g., 2025)"
+                            },
+                            "month": {
+                                "type": "integer",
+                                "description": "Month (1-12)"
+                            }
+                        },
+                        "required": ["year", "month"]
+                    }
+                ),
+                Tool(
+                    name="get_spending_by_category",
+                    description="Get spending breakdown by category for a specific month.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "year": {
+                                "type": "integer",
+                                "description": "Year (e.g., 2025)"
+                            },
+                            "month": {
+                                "type": "integer",
+                                "description": "Month (1-12)"
+                            },
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Limit to top N categories (default: all)"
+                            }
+                        },
+                        "required": ["year", "month"]
+                    }
+                ),
+                Tool(
+                    name="get_transactions_by_bank",
+                    description="Get income/expense totals grouped by bank and account.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "year": {
+                                "type": "integer",
+                                "description": "Year (e.g., 2025)"
+                            },
+                            "month": {
+                                "type": "integer",
+                                "description": "Month (1-12)"
+                            }
+                        },
+                        "required": ["year", "month"]
+                    }
+                ),
+                Tool(
+                    name="get_top_merchants",
+                    description="Get top merchants/payees by total spending for a month.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "year": {
+                                "type": "integer",
+                                "description": "Year (e.g., 2025)"
+                            },
+                            "month": {
+                                "type": "integer",
+                                "description": "Month (1-12)"
+                            },
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Number of top merchants (default: 10)"
+                            }
+                        },
+                        "required": ["year", "month"]
+                    }
+                ),
+                Tool(
+                    name="get_month_comparison",
+                    description="Compare a month's totals with the previous month.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "year": {
+                                "type": "integer",
+                                "description": "Year (e.g., 2025)"
+                            },
+                            "month": {
+                                "type": "integer",
+                                "description": "Month (1-12)"
+                            }
+                        },
+                        "required": ["year", "month"]
+                    }
+                ),
+                Tool(
+                    name="execute_sql",
+                    description="Execute a read-only SQL query. Only SELECT statements allowed.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "SQL SELECT query"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                ),
+                Tool(
+                    name="get_available_months",
+                    description="Get list of months that have transaction data.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="get_database_stats",
+                    description="Get overall database statistics (total transactions, date range, banks).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                )
+            ]
+        
+        @self.server.call_tool()
+        async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+            try:
+                result = await self._execute_tool(name, arguments)
+                return [TextContent(type="text", text=json_dumps(result))]
+            except Exception as e:
+                logger.error(f"Tool {name} failed: {e}")
+                return [TextContent(type="text", text=json_dumps({"error": str(e)}))]
+    
+    async def _execute_tool(self, name: str, args: dict) -> Any:
+        """Execute a tool and return the result."""
+        db = self._get_db()
+        
+        if name == "query_transactions":
+            return await self._query_transactions(db, args)
+        elif name == "get_monthly_summary":
+            return await self._get_monthly_summary(db, args)
+        elif name == "get_spending_by_category":
+            return await self._get_spending_by_category(db, args)
+        elif name == "get_transactions_by_bank":
+            return await self._get_transactions_by_bank(db, args)
+        elif name == "get_top_merchants":
+            return await self._get_top_merchants(db, args)
+        elif name == "get_month_comparison":
+            return await self._get_month_comparison(db, args)
+        elif name == "execute_sql":
+            return await self._execute_sql(db, args)
+        elif name == "get_available_months":
+            return await self._get_available_months(db)
+        elif name == "get_database_stats":
+            return await self._get_database_stats(db)
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+    
+    async def _query_transactions(self, db: PostgresRepository, args: dict) -> dict:
+        """Query transactions with filters."""
+        start_date = date.fromisoformat(args["start_date"]) if args.get("start_date") else None
+        end_date = date.fromisoformat(args["end_date"]) if args.get("end_date") else None
+        
+        transactions = db.get_transactions(
+            start_date=start_date,
+            end_date=end_date,
+            bank_source=args.get("bank_source"),
+            account_id=args.get("account_id"),
+            category=args.get("category"),
+            min_amount=args.get("min_amount"),
+            max_amount=args.get("max_amount"),
+            limit=args.get("limit", 100)
+        )
+        
+        return {
+            "count": len(transactions),
+            "transactions": [
+                {
+                    "date": t.date.isoformat(),
+                    "amount": float(t.amount),
+                    "description": t.description,
+                    "bank_source": t.bank_source,
+                    "account_id": t.account_id,
+                    "category": t.category or t.original_category,
+                    "transaction_type": t.transaction_type.value
+                }
+                for t in transactions
+            ]
+        }
+    
+    async def _get_monthly_summary(self, db: PostgresRepository, args: dict) -> dict:
+        """Get monthly income/expense summary."""
+        year = args["year"]
+        month = args["month"]
+        
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_expenses,
+                COALESCE(SUM(amount), 0) as net,
+                COUNT(*) as transaction_count
+            FROM transactions
+            WHERE date >= %s AND date < %s
+        """, (start_date, end_date))
+        
+        row = cursor.fetchone()
+        return {
+            "year": year,
+            "month": month,
+            "total_income": float(row[0]),
+            "total_expenses": float(row[1]),
+            "net": float(row[2]),
+            "transaction_count": row[3]
+        }
+    
+    async def _get_spending_by_category(self, db: PostgresRepository, args: dict) -> dict:
+        """Get spending breakdown by category."""
+        year = args["year"]
+        month = args["month"]
+        top_n = args.get("top_n")
+        
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+        
+        query = """
+            SELECT 
+                COALESCE(category, original_category, 'Uncategorized') as category,
+                SUM(ABS(amount)) as total,
+                COUNT(*) as count
+            FROM transactions
+            WHERE date >= %s AND date < %s AND amount < 0
+            GROUP BY COALESCE(category, original_category, 'Uncategorized')
+            ORDER BY total DESC
+        """
+        
+        if top_n:
+            query += f" LIMIT {int(top_n)}"
+        
+        cursor = db.conn.cursor()
+        cursor.execute(query, (start_date, end_date))
+        
+        rows = cursor.fetchall()
+        total_spending = float(sum(row[1] for row in rows))
+        
+        return {
+            "year": year,
+            "month": month,
+            "total_spending": total_spending,
+            "categories": [
+                {
+                    "category": row[0],
+                    "total": float(row[1]),
+                    "count": row[2],
+                    "percentage": round(float(row[1]) / total_spending * 100, 1) if total_spending > 0 else 0
+                }
+                for row in rows
+            ]
+        }
+    
+    async def _get_transactions_by_bank(self, db: PostgresRepository, args: dict) -> dict:
+        """Get totals grouped by bank and account."""
+        year = args["year"]
+        month = args["month"]
+        
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT 
+                bank_source,
+                account_id,
+                account_type,
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as income,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as expenses,
+                COALESCE(SUM(amount), 0) as net,
+                COUNT(*) as count
+            FROM transactions
+            WHERE date >= %s AND date < %s
+            GROUP BY bank_source, account_id, account_type
+            ORDER BY bank_source, account_id
+        """, (start_date, end_date))
+        
+        rows = cursor.fetchall()
+        return {
+            "year": year,
+            "month": month,
+            "accounts": [
+                {
+                    "bank_source": row[0],
+                    "account_id": row[1],
+                    "account_type": row[2],
+                    "income": float(row[3]),
+                    "expenses": float(row[4]),
+                    "net": float(row[5]),
+                    "transaction_count": row[6]
+                }
+                for row in rows
+            ]
+        }
+    
+    async def _get_top_merchants(self, db: PostgresRepository, args: dict) -> dict:
+        """Get top merchants by spending."""
+        year = args["year"]
+        month = args["month"]
+        top_n = args.get("top_n", 10)
+        
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT 
+                description,
+                SUM(ABS(amount)) as total,
+                COUNT(*) as count
+            FROM transactions
+            WHERE date >= %s AND date < %s AND amount < 0
+            GROUP BY description
+            ORDER BY total DESC
+            LIMIT %s
+        """, (start_date, end_date, top_n))
+        
+        rows = cursor.fetchall()
+        return {
+            "year": year,
+            "month": month,
+            "top_merchants": [
+                {
+                    "description": row[0],
+                    "total": float(row[1]),
+                    "count": row[2]
+                }
+                for row in rows
+            ]
+        }
+    
+    async def _get_month_comparison(self, db: PostgresRepository, args: dict) -> dict:
+        """Compare month with previous month."""
+        year = args["year"]
+        month = args["month"]
+        
+        # Current month
+        current = await self._get_monthly_summary(db, {"year": year, "month": month})
+        
+        # Previous month
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        
+        previous = await self._get_monthly_summary(db, {"year": prev_year, "month": prev_month})
+        
+        # Calculate changes
+        income_change = current["total_income"] - previous["total_income"]
+        expense_change = current["total_expenses"] - previous["total_expenses"]
+        
+        income_pct = (income_change / previous["total_income"] * 100) if previous["total_income"] > 0 else 0
+        expense_pct = (expense_change / previous["total_expenses"] * 100) if previous["total_expenses"] > 0 else 0
+        
+        return {
+            "current_month": current,
+            "previous_month": previous,
+            "changes": {
+                "income_change": round(income_change, 2),
+                "income_change_percent": round(income_pct, 1),
+                "expense_change": round(expense_change, 2),
+                "expense_change_percent": round(expense_pct, 1),
+                "net_change": round(current["net"] - previous["net"], 2)
+            }
+        }
+    
+    async def _execute_sql(self, db: PostgresRepository, args: dict) -> dict:
+        """Execute a read-only SQL query."""
+        query = args["query"].strip()
+        
+        # Security: Only allow SELECT statements
+        if not query.upper().startswith("SELECT"):
+            raise ValueError("Only SELECT queries are allowed")
+        
+        # Block dangerous keywords
+        dangerous = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "GRANT", "REVOKE"]
+        query_upper = query.upper()
+        for keyword in dangerous:
+            if keyword in query_upper:
+                raise ValueError(f"Query contains forbidden keyword: {keyword}")
+        
+        cursor = db.conn.cursor()
+        cursor.execute(query)
+        
+        # Get column names
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchall()
+        
+        return {
+            "columns": columns,
+            "row_count": len(rows),
+            "rows": [
+                {col: (float(val) if isinstance(val, Decimal) else val.isoformat() if isinstance(val, (date, datetime)) else val)
+                 for col, val in zip(columns, row)}
+                for row in rows
+            ]
+        }
+    
+    async def _get_available_months(self, db: PostgresRepository) -> dict:
+        """Get list of months with data."""
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT 
+                EXTRACT(YEAR FROM date)::int as year,
+                EXTRACT(MONTH FROM date)::int as month,
+                COUNT(*) as count
+            FROM transactions
+            GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
+            ORDER BY year DESC, month DESC
+        """)
+        
+        rows = cursor.fetchall()
+        return {
+            "months": [
+                {"year": row[0], "month": row[1], "transaction_count": row[2]}
+                for row in rows
+            ]
+        }
+    
+    async def _get_database_stats(self, db: PostgresRepository) -> dict:
+        """Get overall database statistics."""
+        cursor = db.conn.cursor()
+        
+        # Total count
+        cursor.execute("SELECT COUNT(*) FROM transactions")
+        total_count = cursor.fetchone()[0]
+        
+        # Date range
+        cursor.execute("SELECT MIN(date), MAX(date) FROM transactions")
+        date_range = cursor.fetchone()
+        
+        # Banks
+        cursor.execute("""
+            SELECT bank_source, COUNT(*) 
+            FROM transactions 
+            GROUP BY bank_source 
+            ORDER BY COUNT(*) DESC
+        """)
+        banks = cursor.fetchall()
+        
+        # Account types
+        cursor.execute("""
+            SELECT account_type, COUNT(*) 
+            FROM transactions 
+            GROUP BY account_type
+        """)
+        account_types = cursor.fetchall()
+        
+        return {
+            "total_transactions": total_count,
+            "date_range": {
+                "earliest": date_range[0].isoformat() if date_range[0] else None,
+                "latest": date_range[1].isoformat() if date_range[1] else None
+            },
+            "banks": [{"bank": row[0], "count": row[1]} for row in banks],
+            "account_types": [{"type": row[0], "count": row[1]} for row in account_types]
+        }
+    
+    async def run_sse(self, host: str = "0.0.0.0", port: int = 8080):
+        """Run the server with SSE transport (for remote access)."""
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        from starlette.responses import JSONResponse
+        import uvicorn
+        
+        sse_transport = SseServerTransport("/messages/")
+        
+        async def handle_sse(request):
+            async with sse_transport.connect_sse(
+                request.scope, request.receive, request._send
+            ) as streams:
+                await self.server.run(
+                    streams[0], streams[1], self.server.create_initialization_options()
+                )
+        
+        async def handle_messages(request):
+            return await sse_transport.handle_post_message(request.scope, request.receive, request._send)
+        
+        async def health_check(request):
+            return JSONResponse({"status": "healthy", "service": "family-finance-mcp"})
+        
+        app = Starlette(
+            routes=[
+                Route("/sse", handle_sse),
+                Route("/messages/", handle_messages, methods=["POST"]),
+                Route("/health", health_check),
+            ]
+        )
+        
+        logger.info(f"Starting MCP server on http://{host}:{port}")
+        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
+    
+    async def run_stdio(self):
+        """Run the server with stdio transport (for local development)."""
+        logger.info("Starting MCP server on stdio")
+        async with stdio_server() as (read_stream, write_stream):
+            await self.server.run(
+                read_stream, write_stream, self.server.create_initialization_options()
+            )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Family Finance MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["sse", "stdio"],
+        default="sse",
+        help="Transport type (default: sse)"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port to listen on (default: 8080)"
+    )
+    
+    args = parser.parse_args()
+    
+    mcp = FamilyFinanceMCP()
+    
+    if args.transport == "sse":
+        asyncio.run(mcp.run_sse(args.host, args.port))
+    else:
+        asyncio.run(mcp.run_stdio())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,10 @@
+# Family Finance MCP Server Dependencies
+
+# MCP SDK for Python
+mcp>=1.0.0
+
+# PostgreSQL driver
+psycopg2-binary>=2.9.0
+
+# Web server for SSE transport
+aiohttp>=3.9.0

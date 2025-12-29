@@ -71,11 +71,30 @@ ssh root@192.168.1.237 docker logs -f family-finance
 psql -h 192.168.1.228 -U readonly -d family_finance
 ```
 
-## Phase 2: Reporting & Analysis (Future)
+## Phase 2: Reporting & Analysis (In Progress)
 
-* [ ] Create monthly income/spending report
-* [ ] Implement category-based analysis
-* [ ] Build trend visualization
+### MCP Server for Database Access ✓ COMPLETE
+* [2025-12-30 10:45:00 AEDT] - Created MCP server (`src/mcp_server/server.py`)
+* [2025-12-30 10:45:00 AEDT] - Implemented 9 tools for querying transaction data
+* [2025-12-30 10:45:00 AEDT] - Tested all tools successfully with Roo
+
+### Available MCP Tools
+| Tool | Description |
+|------|-------------|
+| `get_database_stats` | Overall stats (total transactions, date range, banks) |
+| `get_available_months` | List months with transaction data |
+| `get_monthly_summary` | Income/expenses totals for a month |
+| `get_spending_by_category` | Category breakdown with percentages |
+| `get_transactions_by_bank` | Per-bank/account totals |
+| `get_top_merchants` | Top spending merchants |
+| `get_month_comparison` | Month-over-month comparison |
+| `query_transactions` | Flexible filtered queries |
+| `execute_sql` | Raw SELECT queries (read-only) |
+
+### Remaining Tasks
+* [ ] Create monthly report template and system prompt
+* [ ] Build automated report generation pipeline
+* [ ] Implement trend visualization
 
 ## Phase 3: Transaction Categorization (Future)
 
