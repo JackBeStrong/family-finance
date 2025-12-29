@@ -76,11 +76,20 @@ class WestpacParser(BaseParser):
         
         Detection is based on:
         1. CSV file extension
-        2. Header row containing Westpac-specific columns
+        2. Directory name OR filename contains 'westpac'
+        3. OR header row containing Westpac-specific columns
         """
         if not file_path.suffix.lower() == '.csv':
             return False
         
+        # Check if directory name or filename indicates Westpac
+        dir_name = file_path.parent.name.lower()
+        filename = file_path.stem.lower()  # filename without extension
+        
+        if 'westpac' in dir_name or 'westpac' in filename:
+            return True
+        
+        # Fall back to header detection
         try:
             with open(file_path, 'r', encoding='utf-8-sig') as f:
                 first_line = f.readline().strip()
@@ -108,23 +117,55 @@ class WestpacParser(BaseParser):
         Returns:
             List of normalized Transaction objects
         """
-        transactions = []
+        # First pass: parse all rows into intermediate data
+        parsed_data = []
         rows = self._read_csv(file_path, has_header=True)
         
         for row_num, row in enumerate(rows, start=2):  # Start at 2 (1 = header)
             try:
-                transaction = self._parse_row(row, row_num, file_path)
-                if transaction:
-                    transactions.append(transaction)
+                data = self._parse_row_data(row, row_num, file_path)
+                if data:
+                    parsed_data.append(data)
             except Exception as e:
                 # Log error but continue parsing
                 print(f"Warning: Failed to parse row {row_num}: {e}")
                 continue
         
+        # Second pass: assign occurrence numbers for identical transactions
+        parsed_data = self._assign_occurrence_numbers(parsed_data)
+        
+        # Third pass: create Transaction objects with proper IDs
+        transactions = []
+        for data in parsed_data:
+            trans_id = self._generate_transaction_id(
+                data['date'], data['account_id'], data['amount'],
+                data['description'], data['occurrence']
+            )
+            
+            transaction = Transaction(
+                id=trans_id,
+                date=data['date'],
+                amount=data['amount'],
+                description=data['description'],
+                account_id=data['account_id'],
+                account_type=data['account_type'],
+                bank_source=self.bank_name,
+                source_file=str(file_path),
+                balance=data['balance'],
+                original_category=data['original_category'],
+                transaction_type=data['transaction_type'],
+                merchant_name=data['merchant_name'],
+                location=data['location'],
+                foreign_amount=data['foreign_amount'],
+                foreign_currency=data['foreign_currency'],
+                raw_transaction=data['raw_transaction'],
+            )
+            transactions.append(transaction)
+        
         return transactions
     
-    def _parse_row(self, row: dict, row_num: int, file_path: Path) -> Optional[Transaction]:
-        """Parse a single CSV row into a Transaction."""
+    def _parse_row_data(self, row: dict, row_num: int, file_path: Path) -> Optional[dict]:
+        """Parse a single CSV row into intermediate data dict for occurrence tracking."""
         
         # Extract raw values
         account_id = row.get(self.config.col_account, '').strip()
@@ -181,29 +222,22 @@ class WestpacParser(BaseParser):
         # Extract foreign currency info if present
         foreign_amount, foreign_currency = self._parse_foreign_currency(narrative)
         
-        # Generate unique ID
-        trans_id = self._generate_transaction_id(
-            trans_date, account_id, amount, narrative, row_num
-        )
-        
-        return Transaction(
-            id=trans_id,
-            date=trans_date,
-            amount=amount,
-            description=narrative,
-            account_id=account_id,
-            account_type=account_type,
-            bank_source=self.bank_name,
-            source_file=str(file_path),
-            balance=balance,
-            original_category=category if category else None,
-            transaction_type=trans_type,
-            merchant_name=merchant_name,
-            location=location,
-            foreign_amount=foreign_amount,
-            foreign_currency=foreign_currency,
-            raw_transaction=raw_transaction,
-        )
+        # Return data dict (ID will be generated after occurrence assignment)
+        return {
+            'date': trans_date,
+            'amount': amount,
+            'description': narrative,
+            'account_id': account_id,
+            'account_type': account_type,
+            'balance': balance,
+            'original_category': category if category else None,
+            'transaction_type': trans_type,
+            'merchant_name': merchant_name,
+            'location': location,
+            'foreign_amount': foreign_amount,
+            'foreign_currency': foreign_currency,
+            'raw_transaction': raw_transaction,
+        }
     
     def _detect_account_type(self, account_id: str) -> AccountType:
         """Detect account type from account ID pattern."""

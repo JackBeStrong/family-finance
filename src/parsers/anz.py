@@ -79,14 +79,16 @@ class ANZParser(BaseParser):
         
         Detection is based on:
         1. CSV file extension
-        2. Directory name contains 'anz'
+        2. Directory name OR filename contains 'anz'
         """
         if not file_path.suffix.lower() == '.csv':
             return False
         
-        # Check if directory name indicates ANZ
+        # Check if directory name or filename contains 'anz'
         dir_name = file_path.parent.name.lower()
-        if 'anz' in dir_name:
+        filename = file_path.stem.lower()  # filename without extension
+        
+        if 'anz' in dir_name or 'anz' in filename:
             return True
         
         return False
@@ -108,22 +110,51 @@ class ANZParser(BaseParser):
         Returns:
             List of normalized Transaction objects
         """
-        transactions = []
-        
         # Derive account ID from filename if not provided
         account_id = self._account_id or self._derive_account_id(file_path)
         
+        # First pass: parse all rows into intermediate data
+        parsed_data = []
         rows = self._read_csv(file_path, has_header=False)
         
         for row_num, row in enumerate(rows, start=1):
             try:
-                transaction = self._parse_row(row, row_num, file_path, account_id)
-                if transaction:
-                    transactions.append(transaction)
+                data = self._parse_row_data(row, row_num, file_path, account_id)
+                if data:
+                    parsed_data.append(data)
             except Exception as e:
                 # Log error but continue parsing
                 print(f"Warning: Failed to parse row {row_num}: {e}")
                 continue
+        
+        # Second pass: assign occurrence numbers for identical transactions
+        parsed_data = self._assign_occurrence_numbers(parsed_data)
+        
+        # Third pass: create Transaction objects with proper IDs
+        transactions = []
+        for data in parsed_data:
+            trans_id = self._generate_transaction_id(
+                data['date'], data['account_id'], data['amount'],
+                data['description'], data['occurrence']
+            )
+            
+            transaction = Transaction(
+                id=trans_id,
+                date=data['date'],
+                amount=data['amount'],
+                description=data['description'],
+                account_id=data['account_id'],
+                account_type=data['account_type'],
+                bank_source=self.bank_name,
+                source_file=str(file_path),
+                balance=data['balance'],
+                original_category=data['original_category'],
+                transaction_type=data['transaction_type'],
+                merchant_name=data['merchant_name'],
+                location=data['location'],
+                raw_transaction=data['raw_transaction'],
+            )
+            transactions.append(transaction)
         
         return transactions
     
@@ -143,9 +174,9 @@ class ANZParser(BaseParser):
         # Fall back to filename without extension
         return file_path.stem
     
-    def _parse_row(self, row: dict, row_num: int, file_path: Path, 
-                   account_id: str) -> Optional[Transaction]:
-        """Parse a single CSV row into a Transaction."""
+    def _parse_row_data(self, row: dict, row_num: int, file_path: Path,
+                        account_id: str) -> Optional[dict]:
+        """Parse a single CSV row into intermediate data dict for occurrence tracking."""
         
         # ANZ rows are indexed by column number (no headers)
         date_str = row.get(str(self.config.col_date), '').strip()
@@ -192,27 +223,20 @@ class ANZParser(BaseParser):
         # Extract merchant and location
         merchant_name, location = self._parse_description(description, payee)
         
-        # Generate unique ID
-        trans_id = self._generate_transaction_id(
-            trans_date, account_id, amount, description, row_num
-        )
-        
-        return Transaction(
-            id=trans_id,
-            date=trans_date,
-            amount=amount,
-            description=full_description,
-            account_id=account_id,
-            account_type=self.config.default_account_type,
-            bank_source=self.bank_name,
-            source_file=str(file_path),
-            balance=None,  # ANZ doesn't include balance in exports
-            original_category=None,  # ANZ doesn't categorize
-            transaction_type=trans_type,
-            merchant_name=merchant_name,
-            location=location,
-            raw_transaction=raw_transaction,
-        )
+        # Return data dict (ID will be generated after occurrence assignment)
+        return {
+            'date': trans_date,
+            'amount': amount,
+            'description': full_description,
+            'account_id': account_id,
+            'account_type': self.config.default_account_type,
+            'balance': None,  # ANZ doesn't include balance in exports
+            'original_category': None,  # ANZ doesn't categorize
+            'transaction_type': trans_type,
+            'merchant_name': merchant_name,
+            'location': location,
+            'raw_transaction': raw_transaction,
+        }
     
     def _is_transfer(self, description: str) -> bool:
         """Check if transaction is an internal transfer."""

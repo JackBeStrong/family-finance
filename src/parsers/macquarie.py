@@ -75,11 +75,20 @@ class MacquarieParser(BaseParser):
         
         Detection is based on:
         1. CSV file extension
-        2. Header row containing Macquarie-specific columns (Subcategory, Tags, Original Description)
+        2. Directory name OR filename contains 'macquarie'
+        3. OR header row containing Macquarie-specific columns (Subcategory, Tags, Original Description)
         """
         if not file_path.suffix.lower() == '.csv':
             return False
         
+        # Check if directory name or filename indicates Macquarie
+        dir_name = file_path.parent.name.lower()
+        filename = file_path.stem.lower()  # filename without extension
+        
+        if 'macquarie' in dir_name or 'macquarie' in filename:
+            return True
+        
+        # Fall back to header detection
         try:
             with open(file_path, 'r', encoding='utf-8-sig') as f:
                 first_line = f.readline().strip()

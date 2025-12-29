@@ -69,14 +69,17 @@ class CBAParser(BaseParser):
         
         Detection is based on:
         1. CSV file extension
-        2. Directory name contains 'cba'
+        2. Directory name OR filename contains 'cba', 'commbank', or 'commonwealth'
         """
         if not file_path.suffix.lower() == '.csv':
             return False
         
-        # Check if directory name indicates CBA
+        # Check if directory name or filename indicates CBA
         dir_name = file_path.parent.name.lower()
-        if 'cba' in dir_name or 'commbank' in dir_name or 'commonwealth' in dir_name:
+        filename = file_path.stem.lower()  # filename without extension
+        
+        cba_keywords = ['cba', 'commbank', 'commonwealth']
+        if any(kw in dir_name or kw in filename for kw in cba_keywords):
             return True
         
         return False

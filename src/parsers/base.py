@@ -205,21 +205,77 @@ class BaseParser(ABC):
         """
         pass
     
-    def _generate_transaction_id(self, date: date, account_id: str, 
+    def _generate_transaction_id(self, txn_date: date, account_id: str,
                                   amount: Decimal, description: str,
-                                  row_number: int) -> str:
+                                  occurrence: int) -> str:
         """
-        Generate a unique transaction ID.
+        Generate a unique, human-readable transaction ID.
         
-        Format: {bank}_{date}_{account}_{row}_{hash}
+        Format: {bank}_{date}_{account}_{amount}_{desc_snippet}-{hash}_{occurrence}
+        
+        The occurrence number differentiates identical transactions within the same file.
+        Two identical transactions in the same file get occurrence 1 and 2.
+        The same transaction in a different file would get occurrence 1, making it
+        a duplicate (same ID) that will be rejected by the database.
+        
+        Args:
+            txn_date: Transaction date
+            account_id: Account identifier
+            amount: Transaction amount
+            description: Transaction description
+            occurrence: Occurrence number for identical transactions (1-based)
+            
+        Returns:
+            Human-readable unique ID like: westpac_20251130_7802_-11.40_BUNNINGS-a3f2_1
         """
         import hashlib
+        import re
         
-        # Create a hash from the transaction details
-        hash_input = f"{date.isoformat()}|{account_id}|{amount}|{description}"
-        hash_value = hashlib.md5(hash_input.encode()).hexdigest()[:8]
+        # Create a short hash from the description
+        desc_hash = hashlib.md5(description.encode()).hexdigest()[:4]
         
-        return f"{self.bank_name}_{date.strftime('%Y%m%d')}_{account_id}_{row_number}_{hash_value}"
+        # Create a readable snippet from description (first 8 alphanumeric chars)
+        desc_clean = re.sub(r'[^a-zA-Z0-9]', '', description)[:8].upper()
+        if not desc_clean:
+            desc_clean = "TXN"
+        
+        # Format amount without decimal point issues
+        amount_str = str(amount)
+        
+        return f"{self.bank_name}_{txn_date.strftime('%Y%m%d')}_{account_id}_{amount_str}_{desc_clean}-{desc_hash}_{occurrence}"
+    
+    def _assign_occurrence_numbers(self, transactions_data: list) -> list:
+        """
+        Assign occurrence numbers to transactions for ID generation.
+        
+        Identical transactions (same date, account, amount, description) within
+        the same file get incrementing occurrence numbers (1, 2, 3...).
+        
+        Args:
+            transactions_data: List of dicts with 'date', 'account_id', 'amount', 'description'
+            
+        Returns:
+            Same list with 'occurrence' field added to each dict
+        """
+        from collections import defaultdict
+        
+        # Count occurrences of each unique transaction signature
+        occurrence_counter = defaultdict(int)
+        
+        for txn in transactions_data:
+            # Create a signature for this transaction
+            signature = (
+                txn['date'].isoformat() if hasattr(txn['date'], 'isoformat') else str(txn['date']),
+                str(txn['account_id']),
+                str(txn['amount']),
+                txn['description']
+            )
+            
+            # Increment and assign occurrence number
+            occurrence_counter[signature] += 1
+            txn['occurrence'] = occurrence_counter[signature]
+        
+        return transactions_data
     
     def _parse_date(self, date_str: str, format: str = "%d/%m/%Y") -> date:
         """Parse a date string to a date object."""

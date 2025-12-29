@@ -1,0 +1,8 @@
+# Family Finance - Bank Statement Parser
+# No external dependencies required - uses Python standard library only
+
+# Optional: For future PostgreSQL support
+# psycopg2-binary>=2.9.0
+
+# Optional: For better file watching (inotify)
+# watchdog>=3.0.0
