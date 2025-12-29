@@ -70,7 +70,6 @@ class FileWatcher:
         self.data_dir = Path(data_dir)
         self.processed_dir = self.data_dir / "processed"
         self.failed_dir = self.data_dir / "failed"
-        self.db_path = self.data_dir / "transactions.db"
         self.poll_interval = poll_interval
         
         # Create directories
@@ -78,13 +77,26 @@ class FileWatcher:
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.failed_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize repository
-        self.repo = get_repository(db_path=str(self.db_path))
+        # Initialize repository - uses DB_TYPE env var to select backend
+        # For SQLite: set DB_TYPE=sqlite (default) and optionally DB_PATH
+        # For PostgreSQL: set DB_TYPE=postgres and DB_HOST, DB_USER, DB_PASSWORD, etc.
+        db_type = os.environ.get('DB_TYPE', 'sqlite')
+        if db_type == 'sqlite':
+            db_path = self.data_dir / "transactions.db"
+            self.repo = get_repository(db_path=str(db_path))
+            logger.info(f"File watcher initialized")
+            logger.info(f"  Watch directory: {self.watch_dir}")
+            logger.info(f"  Data directory: {self.data_dir}")
+            logger.info(f"  Database: {db_path} (SQLite)")
+        else:
+            self.repo = get_repository()  # Uses env vars for PostgreSQL
+            db_host = os.environ.get('DB_HOST', 'localhost')
+            db_name = os.environ.get('DB_NAME', 'family_finance')
+            logger.info(f"File watcher initialized")
+            logger.info(f"  Watch directory: {self.watch_dir}")
+            logger.info(f"  Data directory: {self.data_dir}")
+            logger.info(f"  Database: {db_host}/{db_name} (PostgreSQL)")
         
-        logger.info(f"File watcher initialized")
-        logger.info(f"  Watch directory: {self.watch_dir}")
-        logger.info(f"  Data directory: {self.data_dir}")
-        logger.info(f"  Database: {self.db_path}")
         logger.info(f"  Poll interval: {self.poll_interval}s")
     
     def scan_for_files(self) -> list[Path]:
