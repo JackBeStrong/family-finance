@@ -79,6 +79,10 @@ class PostgresRepository(TransactionRepository):
             )
         return self._conn
     
+    def initialize(self) -> None:
+        """No-op: Tables are created via SQL scripts (sql/02_create_tables.sql)."""
+        pass
+    
     # ==================== Transaction CRUD ====================
     
     def save_transaction(self, transaction: Transaction, verbose: bool = False) -> bool:
