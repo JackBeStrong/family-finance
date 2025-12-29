@@ -65,7 +65,6 @@ class PostgresRepository(TransactionRepository):
             raise ValueError("Database user and password are required. Set DB_USER and DB_PASSWORD environment variables.")
         
         self._conn = None
-        self.initialize()
     
     @property
     def conn(self):
@@ -79,53 +78,6 @@ class PostgresRepository(TransactionRepository):
                 password=self.password,
             )
         return self._conn
-    
-    def initialize(self) -> None:
-        """Create database tables if they don't exist."""
-        cursor = self.conn.cursor()
-        
-        # Transactions table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS transactions (
-                id TEXT PRIMARY KEY,
-                date DATE NOT NULL,
-                amount DECIMAL(15, 2) NOT NULL,
-                description TEXT NOT NULL,
-                account_id TEXT NOT NULL,
-                account_type TEXT NOT NULL,
-                bank_source TEXT NOT NULL,
-                source_file TEXT NOT NULL,
-                balance DECIMAL(15, 2),
-                original_category TEXT,
-                category TEXT,
-                transaction_type TEXT NOT NULL,
-                merchant_name TEXT,
-                location TEXT,
-                foreign_amount DECIMAL(15, 2),
-                foreign_currency TEXT,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create indexes for common queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_transactions_date 
-            ON transactions(date)
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_transactions_bank_account 
-            ON transactions(bank_source, account_id)
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_transactions_category 
-            ON transactions(category)
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_transactions_amount 
-            ON transactions(amount)
-        """)
-        
-        self.conn.commit()
     
     # ==================== Transaction CRUD ====================
     
