@@ -5,24 +5,35 @@
 -- Uses existing readwrite and readonly users from the PostgreSQL server
 -- =============================================================================
 
--- Create transactions table
-CREATE TABLE IF NOT EXISTS transactions (
-    id VARCHAR(64) PRIMARY KEY,
+-- Drop existing table if schema changed
+DROP TABLE IF EXISTS transactions;
+
+-- Create transactions table (matches Python postgres_repository.py schema)
+CREATE TABLE transactions (
+    id TEXT PRIMARY KEY,
     date DATE NOT NULL,
+    amount DECIMAL(15, 2) NOT NULL,
     description TEXT NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    balance DECIMAL(12, 2),
-    bank VARCHAR(50) NOT NULL,
-    account_type VARCHAR(50) NOT NULL,
-    source_file VARCHAR(255) NOT NULL,
-    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    account_id TEXT NOT NULL,
+    account_type TEXT NOT NULL,
+    bank_source TEXT NOT NULL,
+    source_file TEXT NOT NULL,
+    balance DECIMAL(15, 2),
+    original_category TEXT,
+    category TEXT,
+    transaction_type TEXT NOT NULL,
+    merchant_name TEXT,
+    location TEXT,
+    foreign_amount DECIMAL(15, 2),
+    foreign_currency TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank);
-CREATE INDEX IF NOT EXISTS idx_transactions_account_type ON transactions(account_type);
-CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);
+CREATE INDEX idx_transactions_date ON transactions(date);
+CREATE INDEX idx_transactions_bank_account ON transactions(bank_source, account_id);
+CREATE INDEX idx_transactions_category ON transactions(category);
+CREATE INDEX idx_transactions_amount ON transactions(amount);
 
 -- Grant permissions to existing users
 -- readwrite user: full access for the import service

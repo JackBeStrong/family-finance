@@ -5,12 +5,15 @@ This module provides a PostgreSQL database for storing transactions,
 enabling independent access for reporting and other services.
 """
 
+import logging
 import os
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Tuple
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -130,6 +133,8 @@ class PostgresRepository(TransactionRepository):
                 
         except Exception as e:
             self.conn.rollback()
+            # Always log errors - they indicate schema or connection issues
+            logger.error(f"Failed to save transaction {transaction.id}: {e}")
             if verbose:
                 print(f"    [ERROR] {transaction.id} - {e}")
             return False
