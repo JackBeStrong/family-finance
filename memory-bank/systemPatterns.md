@@ -1,5 +1,63 @@
 # System Patterns
 
+## Parser Architecture Pattern
+
+### Plugin-Style Bank Parsers
+The system uses a plugin architecture for bank CSV parsers, allowing easy addition of new banks.
+
+```
+src/parsers/
+├── __init__.py      # Public exports
+├── base.py          # BaseParser ABC, Transaction/RawTransaction models
+├── factory.py       # ParserFactory with auto-registration
+├── westpac.py       # Westpac-specific parser
+├── anz.py           # ANZ-specific parser
+└── [future_bank].py # Easy to add new banks
+```
+
+### Key Components
+
+1. **BaseParser (Abstract Base Class)**
+   - `bank_name` property - identifies the bank
+   - `can_parse(file_path)` - auto-detection of file format
+   - `parse(file_path)` - returns List[Transaction]
+
+2. **ParserFactory (Registry Pattern)**
+   - `register(parser_class)` - register new parsers
+   - `detect_parser(file_path)` - auto-detect appropriate parser
+   - `parse_file(file_path)` - parse with auto-detection
+   - `parse_directory(path)` - batch processing
+
+3. **Transaction Model (Normalized Schema)**
+   - Unified format across all banks
+   - Preserves raw data for audit trails
+   - Uses Decimal for financial precision
+
+### Adding a New Bank Parser
+
+```python
+from src.parsers.base import BaseParser, Transaction
+
+class NewBankParser(BaseParser):
+    @property
+    def bank_name(self) -> str:
+        return "newbank"
+    
+    def can_parse(self, file_path: Path) -> bool:
+        # Detection logic
+        pass
+    
+    def parse(self, file_path: Path) -> List[Transaction]:
+        # Parsing logic
+        pass
+
+# Auto-register
+ParserFactory.register(NewBankParser)
+```
+
+---
+[2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
+
 This file documents recurring patterns and standards used in the project.
 
 ---

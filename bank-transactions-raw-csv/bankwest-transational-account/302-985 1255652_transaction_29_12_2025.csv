@@ -1,0 +1,9 @@
+BSB Number,Account Number,Transaction Date,Narration,Cheque,Debit,Credit,Balance,Transaction Type
+302-985,1255652,01/12/2025,"To Westpac Offset 08:17PM 28Nov","",2362.50,,0.00,WDL
+302-985,1255652,28/11/2025,"Ray White Macart Ray White","",,2362.50,2362.50,DEP
+302-985,1255652,31/10/2025,"Ray White Macart Ray White","",,1756.00,0.00,DEP
+302-985,1255652,31/10/2025,"To Westpac Offset 06:34PM 31Oct","",1756.00,,-1756.00,WDL
+302-985,1255652,30/09/2025,"Ray White Macart Ray White","",,1890.00,0.00,DEP
+302-985,1255652,30/09/2025,"To Westpac Offset 08:17PM 30Sep","",1890.00,,-1890.00,WDL
+302-985,1255652,01/09/2025,"To Westpac Offset 07:13AM 30Aug","",1932.72,,0.00,WDL
+302-985,1255652,29/08/2025,"Ray White Macart Ray White","",,1932.72,1932.72,DEP
