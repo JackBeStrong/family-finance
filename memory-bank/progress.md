@@ -2,21 +2,21 @@
 
 This file tracks the project's progress using a task list format.
 
-## Completed Tasks
+## Phase 1: Bank Statement Import System ✓ COMPLETE
+
+### Completed Tasks
 
 * [2025-12-29 14:03:38 AEDT] - Project scope and vision defined
 * [2025-12-29 14:03:38 AEDT] - Memory Bank initialized
 * [2025-12-29 14:44:00 AEDT] - Designed project directory structure (src/parsers/)
 * [2025-12-29 14:44:00 AEDT] - Created core Python package structure
 * [2025-12-29 14:44:00 AEDT] - Defined transaction data models (Transaction, RawTransaction)
-* [2025-12-29 14:44:00 AEDT] - Implemented Westpac CSV parser
-* [2025-12-29 14:44:00 AEDT] - Implemented ANZ CSV parser
+* [2025-12-29 14:44:00 AEDT] - Implemented Westpac CSV parser (credit card, offset account)
+* [2025-12-29 14:44:00 AEDT] - Implemented ANZ CSV parser (transactional)
 * [2025-12-29 14:44:00 AEDT] - Created ParserFactory with auto-detection
-* [2025-12-29 14:44:00 AEDT] - Tested with real data: 152 transactions parsed (148 Westpac, 4 ANZ)
 * [2025-12-29 15:05:00 AEDT] - Implemented Bankwest CSV parser
 * [2025-12-29 15:05:00 AEDT] - Implemented CBA CSV parser
 * [2025-12-29 15:05:00 AEDT] - Implemented Macquarie CSV parser (with rich categorization)
-* [2025-12-29 15:05:00 AEDT] - Tested all 5 banks: 366 transactions parsed
 * [2025-12-29 16:30:00 AEDT] - Created SQLite database module with repository pattern
 * [2025-12-29 16:30:00 AEDT] - Implemented occurrence-based transaction ID generation
 * [2025-12-29 16:30:00 AEDT] - Created file watcher service for automated CSV processing
@@ -28,46 +28,69 @@ This file tracks the project's progress using a task list format.
 * [2025-12-29 18:15:00 AEDT] - Created PostgreSQL repository implementation
 * [2025-12-29 18:15:00 AEDT] - Updated Dockerfile with psycopg2 support
 * [2025-12-29 18:15:00 AEDT] - Updated Ansible playbook with PostgreSQL connection (vault secrets)
-* [2025-12-29 18:15:00 AEDT] - Created SQL scripts for database setup (sql/01_create_database.sql, sql/02_create_tables.sql)
+* [2025-12-29 18:15:00 AEDT] - Created SQL scripts for database setup
 * [2025-12-29 18:15:00 AEDT] - Tested PostgreSQL integration: 366 transactions imported successfully
 
-## Current Architecture
+## Current Production State
 
-### Data Flow
-1. CSV files dropped into NAS folder (`/mnt/user/datastore/tools/bank-statements/`)
-2. File watcher service (Docker container on LXC 128) polls folder every 30s
-3. ParserFactory auto-detects bank format and parses transactions
-4. Transactions saved to PostgreSQL database (192.168.1.228/family_finance)
-5. Processed files moved to `data/processed/` directory
+### Infrastructure
+| Component | Location | Status |
+|-----------|----------|--------|
+| File Watcher | LXC 128 (192.168.1.237) | ✓ Running |
+| PostgreSQL | LXC 110 (192.168.1.228) | ✓ Running |
+| NFS Mount | Unraid NAS | ✓ Mounted |
 
-### Database
-- **PostgreSQL Server**: 192.168.1.228 (LXC VMID 110)
-- **Database**: family_finance
-- **Users**: 
-  - `readwrite` - for import service (full access)
-  - `readonly` - for reporting services (SELECT only)
+### Data
+- **Total Transactions**: 366
+- **Banks Supported**: 5 (ANZ, Bankwest, CBA, Macquarie, Westpac)
+- **Date Range**: Aug 2025 - Dec 2025
 
-### Deployment
-- **LXC Container**: VMID 128, IP 192.168.1.237
-- **Docker Image**: family-finance
-- **NFS Mount**: bank-statements folder from NAS
+## Deployment Commands
 
-## Current Tasks
+### Redeploy After Code Changes
+```bash
+# On local machine
+cd ~/workspace/family-finance
+git add -A && git commit -m "description" && git push
 
-* [x] Design project directory structure
-* [x] Create core Python package structure
-* [x] Define transaction data models
-* [x] Implement CSV bank statement parsers (5 banks)
-* [x] Create SQLite database module
-* [x] Create file watcher service
-* [x] Containerize with Docker
-* [x] Deploy to LXC via Ansible
-* [x] Convert to PostgreSQL for reporting independence
+# On ansible server
+cd ~/family-finance && git pull
+cd ~/home-server-related && git pull
+ansible-playbook -i ~/home-server-related/ansible/hosts \
+  ~/home-server-related/ansible/playbook/family-finance.yml \
+  --ask-vault-pass
+```
+
+### Check Container Status
+```bash
+ssh root@192.168.1.237 docker logs -f family-finance
+```
+
+### Query Database
+```bash
+psql -h 192.168.1.228 -U readonly -d family_finance
+```
+
+## Phase 2: Reporting & Analysis (Future)
+
 * [ ] Create monthly income/spending report
-* [ ] Implement transaction categorization
+* [ ] Implement category-based analysis
+* [ ] Build trend visualization
 
-## Next Steps
+## Phase 3: Transaction Categorization (Future)
 
-* Create monthly report generator (income vs spending by category)
-* Implement transaction categorization (rule-based)
-* Build reporting dashboard or CLI
+* [ ] Design categorization rules
+* [ ] Implement rule-based auto-categorization
+* [ ] Add manual category assignment UI
+
+## Phase 4: Home Loan Management (Future)
+
+* [ ] Mortgage tracking
+* [ ] Extra payment calculations
+* [ ] Interest savings projections
+
+## Phase 5: Investment & Planning (Future)
+
+* [ ] Investment portfolio tracking
+* [ ] Goal-based savings plans
+* [ ] Long-term financial projections

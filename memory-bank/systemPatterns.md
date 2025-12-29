@@ -1,5 +1,47 @@
 # System Patterns
 
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           FAMILY FINANCE SYSTEM                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────┐     ┌──────────────────┐     ┌───────────────────┐   │
+│  │   NAS Share  │────▶│  File Watcher    │────▶│   PostgreSQL DB   │   │
+│  │ (CSV files)  │     │  (LXC Container) │     │  (LXC Container)  │   │
+│  └──────────────┘     └──────────────────┘     └───────────────────┘   │
+│                                                                          │
+│  bank-statements/      192.168.1.237           192.168.1.228            │
+│  └── *.csv             VMID: 128               VMID: 110                │
+│                        Docker: family-finance   DB: family_finance      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Deployment Architecture
+
+### Infrastructure Components
+
+| Component | Location | IP Address | Details |
+|-----------|----------|------------|---------|
+| NAS (Unraid) | Physical | 192.168.1.200 | Stores CSV files in `/mnt/user/datastore/tools/bank-statements/` |
+| Proxmox Host | Physical | 192.168.1.200 | Hosts LXC containers |
+| File Watcher | LXC 128 | 192.168.1.237 | Docker container running `family-finance` |
+| PostgreSQL | LXC 110 | 192.168.1.228 | Database server, `family_finance` database |
+| Ansible Server | LXC | 192.168.1.xxx | Deploys and manages infrastructure |
+
+### Data Flow
+
+1. **CSV Drop**: User exports bank statements and drops CSV files into NAS folder
+2. **NFS Mount**: LXC 128 mounts NAS folder via NFS at `/mnt/bank-statements`
+3. **File Watcher**: Docker container polls `/incoming` every 30 seconds
+4. **Parser**: `ParserFactory` auto-detects bank format and parses transactions
+5. **Database**: Transactions saved to PostgreSQL via `readwrite` user
+6. **Processed**: CSV files moved to `data/processed/` directory
+
+---
+
 ## Parser Architecture Pattern
 
 ### Plugin-Style Bank Parsers
@@ -10,8 +52,11 @@ src/parsers/
 ├── __init__.py      # Public exports
 ├── base.py          # BaseParser ABC, Transaction/RawTransaction models
 ├── factory.py       # ParserFactory with auto-registration
-├── westpac.py       # Westpac-specific parser
-├── anz.py           # ANZ-specific parser
+├── westpac.py       # Westpac parser (credit card, offset account)
+├── anz.py           # ANZ parser (transactional)
+├── cba.py           # CBA parser (transactional)
+├── bankwest.py      # Bankwest parser (transactional)
+├── macquarie.py     # Macquarie parser (with rich categorization)
 └── [future_bank].py # Easy to add new banks
 ```
 
@@ -44,21 +89,109 @@ class NewBankParser(BaseParser):
         return "newbank"
     
     def can_parse(self, file_path: Path) -> bool:
-        # Detection logic
+        # Detection logic - check headers, filename patterns
         pass
     
     def parse(self, file_path: Path) -> List[Transaction]:
         # Parsing logic
         pass
 
-# Auto-register
+# Auto-register in factory.py
 ParserFactory.register(NewBankParser)
 ```
 
 ---
-[2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
 
-This file documents recurring patterns and standards used in the project.
+## Database Architecture
+
+### Repository Pattern
+
+```
+src/database/
+├── __init__.py           # get_repository() factory function
+├── repository.py         # TransactionRepository ABC
+├── sqlite_repository.py  # SQLite implementation (local dev)
+└── postgres_repository.py # PostgreSQL implementation (production)
+```
+
+### Database Selection
+
+The system uses `DB_TYPE` environment variable to select backend:
+- `DB_TYPE=sqlite` (default) - Uses local SQLite file
+- `DB_TYPE=postgres` - Uses PostgreSQL with connection from env vars
+
+### PostgreSQL Schema
+
+```sql
+CREATE TABLE transactions (
+    id TEXT PRIMARY KEY,
+    date DATE NOT NULL,
+    amount DECIMAL(15, 2) NOT NULL,
+    description TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    account_type TEXT NOT NULL,
+    bank_source TEXT NOT NULL,
+    source_file TEXT NOT NULL,
+    balance DECIMAL(15, 2),
+    original_category TEXT,
+    category TEXT,
+    transaction_type TEXT NOT NULL,
+    merchant_name TEXT,
+    location TEXT,
+    foreign_amount DECIMAL(15, 2),
+    foreign_currency TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Database Users
+
+| User | Purpose | Permissions |
+|------|---------|-------------|
+| `readwrite` | File watcher service | ALL on transactions table |
+| `readonly` | Reporting services | SELECT only |
+
+---
+
+## Deployment Pattern
+
+### Ansible-Based Deployment
+
+The system is deployed via Ansible playbook at:
+`~/home-server-related/ansible/playbook/family-finance.yml`
+
+### Deployment Steps
+
+1. **Prepare Code**: Commit changes to git, push to origin
+2. **Sync to Ansible Server**: `git pull` on ansible server
+3. **Run Playbook**: 
+   ```bash
+   ansible-playbook -i ~/home-server-related/ansible/hosts \
+     ~/home-server-related/ansible/playbook/family-finance.yml \
+     --ask-vault-pass
+   ```
+
+### What the Playbook Does
+
+1. Creates/refreshes LXC container (VMID 128)
+2. Mounts NFS share from NAS
+3. Installs Docker
+4. Copies project files to container
+5. Builds Docker image
+6. Runs container with PostgreSQL env vars from vault
+7. Installs Filebeat for log shipping to Kafka
+8. Configures SSH access
+
+### Environment Variables (from Ansible Vault)
+
+```yaml
+DB_TYPE: postgres
+DB_HOST: 192.168.1.228
+DB_PORT: 5432
+DB_NAME: family_finance
+DB_USER: "{{ ALGO_TRADING_DB_USER_RW }}"      # readwrite
+DB_PASSWORD: "{{ ALGO_TRADING_DB_PASSWORD_RW }}"
+```
 
 ---
 
@@ -66,63 +199,53 @@ This file documents recurring patterns and standards used in the project.
 
 ### Naming Conventions
 - **Files**: snake_case (e.g., `bank_parser.py`, `transaction_model.py`)
-- **Classes**: PascalCase (e.g., `TransactionParser`, `SummaryReport`)
-- **Functions/Methods**: snake_case (e.g., `parse_statement()`, `generate_report()`)
+- **Classes**: PascalCase (e.g., `TransactionParser`, `WestpacParser`)
+- **Functions/Methods**: snake_case (e.g., `parse_statement()`, `save_transaction()`)
 - **Constants**: UPPER_SNAKE_CASE (e.g., `DEFAULT_CURRENCY`, `MAX_TRANSACTIONS`)
 
 ### Type Hints
 - Use type hints for all function signatures
 - Use `Optional[]` for nullable parameters
-- Use dataclasses or Pydantic for data models
+- Use dataclasses for data models
 
 ### Error Handling
 - Custom exceptions for domain-specific errors
 - Graceful degradation when parsing fails
 - Detailed logging for debugging
-
----
-
-## Architectural Patterns
-
-### Parser Plugin Pattern
-```
-parsers/
-  base_parser.py      # Abstract base class
-  commbank_parser.py  # Bank-specific implementation
-  westpac_parser.py   # Bank-specific implementation
-```
-- Each bank parser inherits from BaseParser
-- Auto-detection of bank format where possible
-- Fallback to manual selection
-
-### Data Flow
-```
-Bank Statement (CSV/PDF) 
-    → Parser 
-    → Transaction Model 
-    → Categorizer 
-    → Report Generator 
-    → Output (PDF/HTML/CSV)
-```
-
-### Repository Pattern for Data Access
-- Abstract data access from business logic
-- Support multiple storage backends
-- Easy to mock for testing
+- Errors logged to stdout (captured by Filebeat → Kafka)
 
 ---
 
 ## Testing Patterns
 
-### Test Structure
-- Unit tests for individual components
-- Integration tests for data flow
-- Sample data fixtures for each bank format
+### Local Testing
 
-### Test Naming
-- `test_<function_name>_<scenario>_<expected_result>`
-- Example: `test_parse_transaction_valid_csv_returns_transaction_list`
+```bash
+# Parse files locally
+python -m src.parse_transactions bank-transactions-raw-csv/ --output json
+
+# Run watcher locally (SQLite)
+DB_TYPE=sqlite python -m src.watcher --watch-dir ./incoming --data-dir ./data
+
+# Run watcher with PostgreSQL
+DB_TYPE=postgres DB_HOST=192.168.1.228 DB_USER=readwrite DB_PASSWORD=xxx \
+  python -m src.watcher --watch-dir ./incoming --data-dir ./data
+```
+
+### Production Testing
+
+```bash
+# Copy test files to NAS
+cp -r bank-transactions-raw-csv/* /mnt/nas/datastore/tools/bank-statements/
+
+# Check container logs
+ssh root@192.168.1.237 docker logs -f family-finance
+
+# Query database
+psql -h 192.168.1.228 -U readonly -d family_finance -c "SELECT COUNT(*) FROM transactions"
+```
 
 ---
 
-[2025-12-29 14:04:59 AEDT] - Initial patterns documented
+[2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
+[2025-12-29 18:15:00 AEDT] - Added deployment architecture and PostgreSQL patterns
