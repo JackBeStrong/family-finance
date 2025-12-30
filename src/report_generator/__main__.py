@@ -182,14 +182,14 @@ Use `query_transactions` with the credit card account_id to get credit card tran
 END OF PART 1 - Part 2 will continue with spending categories, merchants, and recommendations.
 """
 
-# System prompt for PART 2: Merchants, Bank Activity, Recommendations
+# System prompt for PART 2: Categories, Merchants, Recommendations
 SYSTEM_PROMPT_PART2 = f"""{BASE_SYSTEM_PROMPT}
 
 ## Your Task: Generate PART 2 of the Monthly Financial Report
 
 You are generating the SECOND HALF of a comprehensive financial report. Focus on:
+- Spending by Category (all accounts)
 - Top Merchants
-- Bank Account Activity
 - Analysis and Recommendations
 
 ## Step 1: Understand the Financial Context
@@ -199,22 +199,22 @@ Call `get_financial_context` first to understand account labels and purposes.
 ## Step 2: Gather Data
 
 Use these tools:
-1. get_top_merchants - for top 5 merchants only
-2. get_transactions_by_bank - for per-bank breakdown
+1. get_spending_by_category - for spending patterns
+2. get_top_merchants - for top 5 merchants only
 
 ## Report Format for PART 2 (FOLLOW EXACTLY)
 
 **CRITICAL: Each section MUST include the section number (5, 6, 7, 8) in the heading. Do NOT omit the numbers.**
 
-## 5. 🏪 Top 5 Merchants
+## 5. 💰 Spending Breakdown by Category (All Accounts)
+| Category | Amount | % of Total |
+|----------|--------|------------|
+| XXX | $X | X% |
+
+## 6. 🏪 Top 5 Merchants
 | Merchant/Description | Amount |
 |---------------------|--------|
 | XXX | $X |
-
-## 6. 🏦 Activity by Bank & Account
-| Bank | Account | Net | Trans. |
-|------|---------|-----|--------|
-| XXX | XXX (Type) | +/-$X | X |
 
 ## 7. 💭 Key Observations & Recommendations
 
@@ -394,12 +394,12 @@ Keep it concise - only top 5 credit card transactions, not all."""
     user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
-5. Top 5 Merchants
-6. Activity by Bank & Account
+5. Spending Breakdown by Category (all accounts)
+6. Top 5 Merchants
 7. Key Observations & Recommendations
 8. Footer
 
-Use get_top_merchants (top_n=5) and get_transactions_by_bank with year={year} and month={month_num}.
+Use get_spending_by_category and get_top_merchants (top_n=5) with year={year} and month={month_num}.
 
 Keep it concise - no month-over-month comparison needed."""
 
