@@ -8,3 +8,6 @@ psycopg2-binary>=2.9.0
 
 # Web server for SSE transport
 aiohttp>=3.9.0
+
+# YAML parsing for context store
+pyyaml>=6.0.0

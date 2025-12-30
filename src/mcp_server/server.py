@@ -34,6 +34,7 @@ from mcp.types import Tool, TextContent
 # Database imports - reuse existing repository
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.database.postgres_repository import PostgresRepository
+from src.mcp_server.context_store import FinancialContextStore
 
 # Configure logging with DEBUG level for development
 logging.basicConfig(
@@ -73,11 +74,17 @@ class FamilyFinanceMCP:
     - get_top_merchants: Top spending merchants
     - get_month_comparison: Month-over-month comparison
     - execute_sql: Raw SELECT queries (read-only)
+    
+    Context Store tools:
+    - get_financial_context: Get full financial context
+    - get_account_context: Get context for a specific account
+    - get_property_context: Get context for a specific property
     """
     
     def __init__(self):
         self.server = Server("family-finance-mcp")
         self.db: Optional[PostgresRepository] = None
+        self.context_store = FinancialContextStore()
         self._setup_tools()
     
     def _get_db(self) -> PostgresRepository:
@@ -267,6 +274,72 @@ class FamilyFinanceMCP:
                         "type": "object",
                         "properties": {}
                     }
+                ),
+                # ==========================================
+                # CONTEXT STORE TOOLS
+                # ==========================================
+                Tool(
+                    name="get_financial_context",
+                    description="""Get the full financial context including:
+- People (household members and their aliases)
+- Accounts (all bank accounts with purposes, linked properties)
+- Properties (investment properties with addresses)
+- Entities (known merchants, employers, etc.)
+- Category rules (for transaction categorization)
+- Reporting preferences
+
+Use this to understand the user's financial structure before generating reports.""",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "section": {
+                                "type": "string",
+                                "description": "Optional: Get only a specific section (people, accounts, properties, entities, category_rules, categories, reporting)"
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="get_account_context",
+                    description="""Get detailed context for a specific bank account.
+
+Returns:
+- Account type (loan, offset, transaction, credit_card, etc.)
+- Purpose (mortgage, daily_spending, salary, etc.)
+- Linked property details (for mortgage/offset accounts)
+- Linked loan details (for offset accounts)
+
+Use this to understand what an account is used for when analyzing transactions.""",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "account_id": {
+                                "type": "string",
+                                "description": "The account ID to look up (e.g., '037194383538', '7802')"
+                            }
+                        },
+                        "required": ["account_id"]
+                    }
+                ),
+                Tool(
+                    name="get_property_context",
+                    description="""Get detailed context for a specific property.
+
+Returns:
+- Property address and type (investment, ppor)
+- All linked accounts (mortgage loan, offset accounts)
+
+Use this to understand property-related transactions like mortgage interest.""",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "property_id": {
+                                "type": "string",
+                                "description": "The property ID to look up (e.g., 'property_1', 'property_2')"
+                            }
+                        },
+                        "required": ["property_id"]
+                    }
                 )
             ]
         
@@ -285,6 +358,15 @@ class FamilyFinanceMCP:
     
     async def _execute_tool(self, name: str, args: dict) -> Any:
         """Execute a tool and return the result."""
+        # Context store tools (don't need database)
+        if name == "get_financial_context":
+            return await self._get_financial_context(args)
+        elif name == "get_account_context":
+            return await self._get_account_context(args)
+        elif name == "get_property_context":
+            return await self._get_property_context(args)
+        
+        # Database tools
         db = self._get_db()
         
         if name == "query_transactions":
@@ -307,6 +389,33 @@ class FamilyFinanceMCP:
             return await self._get_database_stats(db)
         else:
             raise ValueError(f"Unknown tool: {name}")
+    
+    # ==========================================
+    # CONTEXT STORE TOOL IMPLEMENTATIONS
+    # ==========================================
+    
+    async def _get_financial_context(self, args: dict) -> dict:
+        """Get the full financial context or a specific section."""
+        section = args.get("section")
+        return self.context_store.get_full_context(section)
+    
+    async def _get_account_context(self, args: dict) -> dict:
+        """Get context for a specific account."""
+        account_id = args.get("account_id")
+        if not account_id:
+            return {"error": "account_id is required"}
+        return self.context_store.get_account_context(account_id)
+    
+    async def _get_property_context(self, args: dict) -> dict:
+        """Get context for a specific property."""
+        property_id = args.get("property_id")
+        if not property_id:
+            return {"error": "property_id is required"}
+        return self.context_store.get_property_context(property_id)
+    
+    # ==========================================
+    # DATABASE TOOL IMPLEMENTATIONS
+    # ==========================================
     
     async def _query_transactions(self, db: PostgresRepository, args: dict) -> dict:
         """Query transactions with filters."""

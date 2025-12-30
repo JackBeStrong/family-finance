@@ -1,0 +1,327 @@
+# =============================================================================
+# Family Finance Context Store
+# =============================================================================
+# This file provides context for AI-powered financial reporting.
+# The AI uses this to understand your financial structure and generate
+# meaningful, personalized reports.
+#
+# Version: 1.0
+# Last Updated: 2025-12-30
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# HOUSEHOLD MEMBERS
+# -----------------------------------------------------------------------------
+# Define family members and their aliases as they appear in transactions.
+# This helps the AI identify who is involved in each transaction.
+
+people:
+  - id: primary
+    name: "Junzhou An"
+    role: primary_account_holder
+    aliases:
+      - "JUNZHOU AN"
+      - "J AN"
+      - "Jack"
+      - "JUNZHOU AN G"
+    
+  - id: spouse
+    name: "Baozhu Fan"
+    role: spouse
+    aliases:
+      - "MS BAOZHU FAN"
+      - "BAOZHU FAN"
+
+# -----------------------------------------------------------------------------
+# BANK ACCOUNTS
+# -----------------------------------------------------------------------------
+# Map account numbers to their purposes. This is crucial for understanding
+# what each transaction means in context.
+
+accounts:
+  # -------------------------
+  # MORTGAGE ACCOUNTS (Loans)
+  # -------------------------
+  # These are the actual loan accounts where interest is charged
+  # All properties are investment properties
+  
+  - account_id: "037194383538"
+    bank: westpac
+    type: loan
+    purpose: mortgage
+    property_id: property_1
+    label: "4 Mann Pl Mortgage"
+    notes: "Investment property loan"
+    
+  - account_id: "037194383546"
+    bank: westpac
+    type: loan
+    purpose: mortgage
+    property_id: property_2
+    label: "16 Austin Ave Mortgage"
+    notes: "Investment property loan"
+    
+  - account_id: "037194383554"
+    bank: westpac
+    type: loan
+    purpose: mortgage
+    property_id: property_3
+    label: "24 Hindmarsh Ct Mortgage"
+    notes: "Investment property loan"
+
+  # -------------------------
+  # OFFSET ACCOUNTS
+  # -------------------------
+  # Offset accounts linked to mortgages - reduce interest on linked loan
+  # Salary is deposited to the Hindmarsh offset (primary hub)
+  
+  - account_id: "732134759593"
+    bank: westpac
+    type: offset
+    purpose: mortgage_offset
+    linked_to: "037194383538"
+    property_id: property_1
+    label: "4 Mann Pl Offset"
+    
+  - account_id: "732134759606"
+    bank: westpac
+    type: offset
+    purpose: mortgage_offset
+    linked_to: "037194383546"
+    property_id: property_2
+    label: "16 Austin Av Offset"
+    
+  - account_id: "732134759614"
+    bank: westpac
+    type: offset
+    purpose: mortgage_offset_and_hub
+    linked_to: "037194383554"
+    property_id: property_3
+    label: "24 Hindmarsh Ct Offset"
+    notes: "Primary hub account - salary deposited here"
+
+  # -------------------------
+  # OTHER WESTPAC ACCOUNTS
+  # -------------------------
+  
+  - account_id: "034702551347"
+    bank: westpac
+    type: savings
+    purpose: foreign_currency
+    label: "Westpac USD Account"
+    notes: "USD account - not actively used"
+    
+  - account_id: "7802"
+    bank: westpac
+    type: credit_card
+    purpose: daily_spending
+    label: "Westpac Altitude Credit Card"
+    notes: "Primary credit card for daily expenses"
+
+  # -------------------------
+  # OTHER BANK ACCOUNTS
+  # -------------------------
+  
+  - account_id: "anz-transactional-account"
+    bank: anz
+    type: transaction
+    purpose: secondary
+    label: "ANZ Transaction Account"
+    
+  - account_id: "302-985-1255652"
+    bank: bankwest
+    type: transaction
+    purpose: secondary
+    label: "Bankwest Transaction Account"
+    
+  - account_id: "cba-transational-account"
+    bank: cba
+    type: transaction
+    purpose: secondary
+    label: "CBA Transaction Account"
+    
+  - account_id: "macquarie-platinum"
+    bank: macquarie
+    type: transaction
+    purpose: rent_payment
+    label: "Macquarie Transaction Account"
+    notes: "Used for rent payments only"
+
+# -----------------------------------------------------------------------------
+# PROPERTY PORTFOLIO
+# -----------------------------------------------------------------------------
+# Define properties for mortgage and rental income tracking.
+# All properties are investment properties.
+
+properties:
+  - id: property_1
+    address: "4 Mann Pl"
+    type: investment
+    notes: "Investment property - rental income"
+    
+  - id: property_2
+    address: "16 Austin Ave"
+    type: investment
+    notes: "Investment property - rental income"
+    
+  - id: property_3
+    address: "24 Hindmarsh Ct"
+    type: investment
+    notes: "Investment property - rental income"
+
+# -----------------------------------------------------------------------------
+# KNOWN ENTITIES
+# -----------------------------------------------------------------------------
+# Define merchants, employers, and other entities for categorization.
+# The AI uses aliases to match transaction descriptions.
+
+entities:
+  # Current Employer
+  - id: amazon
+    name: "Amazon"
+    type: employer
+    status: current
+    category: income.salary
+    aliases:
+      - "AMAZON SUPPORT S"
+      - "AMAZON SUPPORT SERVICES"
+      - "AMAZON SUPPORT SERVICES PTY LTD"
+      
+  # Former Employer (historical transactions)
+  - id: macquarie_employer
+    name: "Macquarie Bank"
+    type: employer
+    status: former
+    category: income.salary
+    notes: "Former employer - historical salary data"
+    aliases:
+      - "Salary from Macquarie Bank"
+      - "MACQUARIE BANK L"
+
+  # Landlord's Real Estate Agent (rent expense)
+  - id: metro_realty
+    name: "Metro Realty"
+    type: landlord_agent
+    category: expense.rent
+    notes: "Landlord's real estate agent - rent payments go here"
+    aliases:
+      - "From Metro Realty"
+      - "Metro Realty -"
+
+  # Financial Institutions
+  - id: westpac_internal
+    name: "Westpac Internal"
+    type: bank
+    category: transfer.internal
+    aliases:
+      - "WESTPAC BANKCORP"
+      - "WESTPAC BANKCORPDIRECT"
+      - "TFR Westpac"
+
+# -----------------------------------------------------------------------------
+# CATEGORY RULES
+# -----------------------------------------------------------------------------
+# Pattern-based rules for auto-categorization.
+# Rules are evaluated in order; first match wins.
+
+category_rules:
+  # Income Categories
+  - name: "Mortgage Interest"
+    pattern: "INTEREST"
+    conditions:
+      original_category: "INT"
+      account_type: loan
+    category: expense.mortgage_interest
+    priority: 100
+    
+  - name: "Bank Interest Earned"
+    pattern: "Payment"
+    conditions:
+      original_category: "Income > Interest"
+    category: income.interest
+    priority: 90
+    
+  - name: "Salary"
+    pattern: "Salary from"
+    category: income.salary
+    priority: 100
+    
+  - name: "Rent Payment"
+    pattern: "From Metro Realty"
+    category: expense.rent
+    priority: 100
+
+  # Expense Categories
+  - name: "Bank Fees"
+    pattern: "FEE"
+    conditions:
+      original_category: "FEE"
+    category: expense.bank_fees
+    priority: 80
+
+  # Transfer Categories
+  - name: "Internal Transfer"
+    pattern: "TFR"
+    category: transfer.internal
+    priority: 50
+    
+  - name: "Credit Card Payment"
+    pattern: "Altitude"
+    conditions:
+      account_type: offset
+    category: transfer.credit_card_payment
+    priority: 60
+
+# -----------------------------------------------------------------------------
+# CATEGORY HIERARCHY
+# -----------------------------------------------------------------------------
+# Define the category structure for reporting.
+
+categories:
+  income:
+    label: "Income"
+    subcategories:
+      salary: "Salary & Wages"
+      rental: "Rental Income"
+      interest: "Interest Earned"
+      other: "Other Income"
+      
+  expense:
+    label: "Expenses"
+    subcategories:
+      mortgage_interest: "Mortgage Interest"
+      rent: "Rent"
+      bank_fees: "Bank Fees"
+      utilities: "Utilities"
+      groceries: "Groceries"
+      transport: "Transport"
+      entertainment: "Entertainment"
+      other: "Other Expenses"
+      
+  transfer:
+    label: "Transfers"
+    subcategories:
+      internal: "Internal Transfer"
+      credit_card_payment: "Credit Card Payment"
+      mortgage_payment: "Mortgage Payment"
+
+# -----------------------------------------------------------------------------
+# REPORTING PREFERENCES
+# -----------------------------------------------------------------------------
+# Customize how reports are generated.
+
+reporting:
+  # Group mortgage interest by property in reports
+  group_mortgage_by_property: true
+  
+  # Group rental income by property in reports
+  group_rental_by_property: true
+  
+  # Exclude internal transfers from spending totals
+  exclude_transfers_from_totals: true
+  
+  # Currency
+  currency: "AUD"
+  currency_symbol: "$"

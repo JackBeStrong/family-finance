@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
+# Copy configuration files (financial context for categorization)
+COPY config/ ./config/
+
 # Expose MCP server port
 EXPOSE 8080
 
