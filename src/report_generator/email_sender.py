@@ -5,13 +5,14 @@ Supports:
 - Plain text emails
 - HTML emails
 - Markdown emails (converted to HTML via 'markdown' library)
+- Multiple recipients (comma-separated)
 
 Configuration via environment variables:
 - SMTP_SERVER: SMTP server hostname (default: smtp.gmail.com)
 - SMTP_PORT: SMTP server port (default: 587)
 - SMTP_PASSWORD: SMTP password (Gmail app password)
 - SENDER_EMAIL: Sender email address
-- RECEIVER_EMAIL: Recipient email address
+- RECEIVER_EMAIL: Recipient email address(es), comma-separated for multiple
 """
 
 import os
@@ -20,7 +21,7 @@ import logging
 import markdown
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from typing import Optional, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +71,25 @@ class EmailSender:
         if not self.receiver_email:
             raise ValueError("RECEIVER_EMAIL environment variable is required")
     
+    def _parse_recipients(self, emails: Union[str, List[str]]) -> List[str]:
+        """
+        Parse recipient email(s) into a list.
+        
+        Supports:
+        - Single email string
+        - Comma-separated email string
+        - List of emails
+        """
+        if isinstance(emails, list):
+            return [e.strip() for e in emails if e.strip()]
+        return [e.strip() for e in emails.split(',') if e.strip()]
+    
     def send_email(
         self,
         subject: str,
         body: str,
         content_type: str = "plain",
-        receiver_email: Optional[str] = None
+        receiver_email: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """
         Send an email via SMTP.
@@ -84,20 +98,20 @@ class EmailSender:
             subject: Email subject line
             body: Email body content
             content_type: One of "plain", "html", or "markdown"
-            receiver_email: Override default receiver (optional)
+            receiver_email: Override default receiver(s) (optional), can be comma-separated
         
         Returns:
             True if email sent successfully, False otherwise
         """
-        to_email = receiver_email or self.receiver_email
+        recipients = self._parse_recipients(receiver_email or self.receiver_email)
         
-        logger.info(f"Sending email to {to_email}, subject: {subject}, type: {content_type}")
+        logger.info(f"Sending email to {recipients}, subject: {subject}, type: {content_type}")
         
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = self.sender_email
-            msg["To"] = to_email
+            msg["To"] = ", ".join(recipients)  # Header shows all recipients
             
             if content_type == "markdown":
                 # Convert markdown to HTML using the markdown library
@@ -114,9 +128,9 @@ class EmailSender:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
                 server.login(self.sender_email, self.smtp_password)
-                server.sendmail(self.sender_email, to_email, msg.as_string())
+                server.sendmail(self.sender_email, recipients, msg.as_string())
             
-            logger.info("Email sent successfully")
+            logger.info(f"Email sent successfully to {len(recipients)} recipient(s)")
             return True
             
         except Exception as e:

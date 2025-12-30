@@ -24,6 +24,7 @@ import re
 import asyncio
 import logging
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
@@ -96,9 +97,24 @@ Format your report in clean markdown with:
 
 Be concise but insightful. Focus on actionable insights. Use tables for data presentation."""
 
-# User prompt for generating the report
-USER_PROMPT = """Generate a comprehensive monthly financial report for the most recent month with data.
-Include spending analysis, category breakdown, top merchants, and comparison with the previous month."""
+def get_user_prompt() -> str:
+    """
+    Generate the user prompt with the target month (last month).
+    
+    Since reports are typically generated at the start of a new month,
+    we want to report on the previous month which has complete data.
+    """
+    # Calculate last month
+    today = datetime.now()
+    last_month = today - relativedelta(months=1)
+    month_name = last_month.strftime("%B")  # e.g., "November"
+    year = last_month.year
+    month_num = last_month.month
+    
+    return f"""Generate a comprehensive monthly financial report for {month_name} {year} (month {month_num}).
+
+Use get_monthly_summary with year={year} and month={month_num} to get the data.
+Include spending analysis, category breakdown, top merchants, and comparison with the previous month ({(last_month - relativedelta(months=1)).strftime('%B %Y')})."""
 
 app = MCPApp(name="finance_report_generator")
 
@@ -156,8 +172,9 @@ async def generate_report() -> str:
             llm = await agent.attach_llm(AnthropicAugmentedLLM)
             
             # Generate the report
-            logger.info("Generating financial report...")
-            report = await llm.generate_str(message=USER_PROMPT)
+            user_prompt = get_user_prompt()
+            logger.info(f"Generating financial report with prompt: {user_prompt[:100]}...")
+            report = await llm.generate_str(message=user_prompt)
             
             return report
 
