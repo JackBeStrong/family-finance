@@ -136,6 +136,8 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 
 ### Future Enhancements
 * [x] Refine report prompt for more detailed analysis → Done via Financial Context Store
+* [x] Report on last month (not current) for complete data → Done 2025-12-30
+* [x] Support multiple email recipients → Done 2025-12-30 (ready for future use)
 * [ ] Add trend visualization charts
 * [ ] Add budget tracking and alerts
 

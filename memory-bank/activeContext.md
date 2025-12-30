@@ -126,6 +126,8 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-30 20:20:00 AEDT] - Created Financial Context Store (config/financial-context.yaml)
 * [2025-12-30 20:20:00 AEDT] - Added 3 new MCP tools for context (get_financial_context, get_account_context, get_property_context)
 * [2025-12-30 20:20:00 AEDT] - Updated report generator to use context for enriched categorization
+* [2025-12-30 20:39:00 AEDT] - Report generator now reports on last month (not current month) for complete data
+* [2025-12-30 20:39:00 AEDT] - Email sender now supports multiple comma-separated recipients (for future use)
 
 ## Key Files
 
