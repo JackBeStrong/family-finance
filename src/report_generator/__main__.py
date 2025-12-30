@@ -29,6 +29,7 @@ from dateutil.relativedelta import relativedelta
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
+from mcp_agent.config import Settings, get_settings
 
 from .email_sender import send_report_email
 
@@ -144,6 +145,51 @@ def get_user_prompt() -> str:
 
 Use get_monthly_summary with year={year} and month={month_num} to get the data.
 Include spending analysis, category breakdown, top merchants, and comparison with the previous month ({(last_month - relativedelta(months=1)).strftime('%B %Y')})."""
+
+def setup_ibkr_environment():
+    """
+    Ensure IB_FLEX_TOKEN is available for the interactive-brokers MCP server.
+    
+    The mcp-agent library's YAML config doesn't expand ${VAR} syntax in the env block.
+    We need to ensure the environment variable is set in the current process so that
+    when the stdio MCP server is spawned, it inherits the token.
+    
+    This function also patches the mcp-agent's get_default_environment to include
+    our custom environment variables.
+    """
+    ib_token = os.environ.get("IB_FLEX_TOKEN")
+    if ib_token:
+        logger.info("IB_FLEX_TOKEN found in environment")
+    else:
+        logger.warning("IB_FLEX_TOKEN not found in environment - IBKR MCP will fail")
+        return
+    
+    # Patch the subprocess environment to include IB_FLEX_TOKEN
+    # The mcp library uses get_default_environment() which only returns minimal vars
+    # We need to ensure our token is passed through
+    try:
+        from mcp.client.stdio import get_default_environment
+        import mcp.client.stdio as stdio_module
+        
+        original_get_default_environment = get_default_environment
+        
+        def patched_get_default_environment():
+            """Return default environment plus IB_FLEX_TOKEN."""
+            env = original_get_default_environment()
+            # Add IB_FLEX_TOKEN from current environment
+            if "IB_FLEX_TOKEN" in os.environ:
+                env["IB_FLEX_TOKEN"] = os.environ["IB_FLEX_TOKEN"]
+            return env
+        
+        # Monkey-patch the function
+        stdio_module.get_default_environment = patched_get_default_environment
+        logger.info("Patched get_default_environment to include IB_FLEX_TOKEN")
+    except ImportError as e:
+        logger.warning(f"Could not patch mcp.client.stdio: {e}")
+
+
+# Setup IBKR environment before creating the app
+setup_ibkr_environment()
 
 app = MCPApp(name="finance_report_generator")
 

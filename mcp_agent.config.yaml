@@ -13,8 +13,9 @@ mcp:
       transport: stdio
       command: npx
       args: ["-y", "interactive-brokers-mcp"]
-      env:
-        IB_FLEX_TOKEN: "${IB_FLEX_TOKEN}"
+      # Note: IB_FLEX_TOKEN is injected programmatically in __main__.py
+      # via monkey-patching get_default_environment() because mcp-agent
+      # doesn't expand ${VAR} syntax in the env block
 
 anthropic:
   default_model: claude-sonnet-4-5
