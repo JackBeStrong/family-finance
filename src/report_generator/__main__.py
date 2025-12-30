@@ -92,40 +92,143 @@ Similarly, use `get_property_context` to understand all accounts linked to a pro
 
 ## Step 4: Gather Bank Transaction Data
 
-Use these tools to gather data:
+Use these tools to gather comprehensive data:
 1. get_monthly_summary - for income/expense totals
-2. get_spending_by_category - for spending patterns
-3. get_top_merchants - for major expenses (limit to top 5)
-4. get_transactions_by_bank - for per-bank breakdown
+2. get_spending_by_category - for ALL spending patterns (not just top 5)
+3. get_top_merchants - for top 10 merchants/expenses
+4. get_transactions_by_bank - for per-bank breakdown with all accounts
+5. get_month_comparison - for month-over-month comparison
+6. query_transactions - to get detailed credit card transactions (filter by account_id for credit cards)
 
-Keep the bank transaction analysis concise. Focus on key insights, not exhaustive details.
-
-## Report Format (FOLLOW THIS ORDER)
+## Report Format (FOLLOW THIS EXACT STRUCTURE WITH EMOJIS)
 
 Format your report in clean markdown with these sections IN THIS ORDER:
 
-1. **Title** - "Monthly Financial Report - [Month Year]"
+### 1. Title and Header
+```
+# Monthly Financial Report: [Month Year]
+## Executive Summary
 
-2. **Executive Summary** - 3-4 bullet points with:
-   - Net cash flow (income - expenses)
-   - Investment portfolio total value
-   - Key highlight of the month
+**Period:** [Month] 1-[last day], [Year] | **Transactions:** [count]
+```
 
-3. **Investment Portfolio** (REQUIRED SECTION)
-   - Total Portfolio Value (from ChangeInNAV.endingValue)
-   - Holdings table: Symbol | Shares | Value | Cost Basis | Unrealized P&L
-   - Dividends received this period
-   - Any realized gains from trades
+### 2. Summary Table
+| Metric | Amount | Change vs [Previous Month] |
+|--------|--------|---------------------------|
+| Total Income | $X | ⬆️/⬇️ X% (+/-$X) |
+| Total Expenses | $X | ⬆️/⬇️ X% (+/-$X) |
+| Net Position | $X | ⬆️/⬇️ $X |
 
-4. **Bank Account Summary**
-   - Total income and expenses
-   - Net position
+### 3. 🚨 Key Highlights (3-5 bullet points)
+- Investment portfolio value and performance
+- Credit card spending summary
+- Notable income/expense changes
+- Any unusual transactions or patterns
 
-5. **Spending by Category** (top 5 categories only, table format)
+### 4. 💳 Credit Card Spending Detail (HIGH PRIORITY)
+Use `query_transactions` with the credit card account_id (from financial context) to get all credit card transactions.
+This is one of the most important sections - show detailed daily spending.
 
-6. **Key Observations** (2-3 bullet points)
+**Credit Card Summary:**
+- Total Spend: $X
+- Number of Transactions: X
+- Average Transaction: $X
+- Largest Transaction: $X (description)
 
-Keep the report concise (under 4000 characters). Focus on insights, not raw data dumps."""
+**Transaction Details:**
+| Date | Description | Amount | Category |
+|------|-------------|--------|----------|
+| XX/XX | XXX | $X | XXX |
+
+**Spending Analysis:**
+Group and analyze the transactions:
+- 🍽️ Dining/Restaurants: $X (X transactions)
+- 🛒 Groceries: $X (X transactions)
+- 🛍️ Shopping: $X (X transactions)
+- 🔄 Subscriptions: $X (list them)
+- ⛽ Transport/Fuel: $X (X transactions)
+- 🎬 Entertainment: $X (X transactions)
+- Other: $X
+
+Highlight any unusual or large purchases.
+
+### 5. 📈 Investment Portfolio (REQUIRED)
+**Total Portfolio Value:** $X USD (~$X AUD)
+
+| Symbol | Shares | Market Value (USD) | Cost Basis (USD) | Unrealized P&L (USD) |
+|--------|--------|-------------------|------------------|---------------------|
+| XXX | X | $X | $X | +/-$X (+/-X%) |
+
+**Dividend Income (Month):** $X USD
+- Breakdown by symbol
+
+**Realized Gains:** $X USD (if any trades)
+
+**Interest Income:** $X USD (if any)
+
+### 6. 💰 Spending Breakdown by Category (All Accounts)
+| Category | Amount | % of Total | Transactions |
+|----------|--------|------------|--------------|
+| XXX | $X | X% | X |
+
+### 7. 📊 Category Insights
+- 2-3 bullet points analyzing the spending patterns
+- Note any unusual categories or amounts
+
+### 8. 🏪 Top 10 Merchants/Transactions
+| Merchant/Description | Amount | Count |
+|---------------------|--------|-------|
+| XXX | $X | X |
+
+**Top 10 Total:** $X (X% of all expenses)
+
+### 9. 🏦 Activity by Bank & Account
+| Bank | Account | Income | Expenses | Net | Trans. |
+|------|---------|--------|----------|-----|--------|
+| XXX | XXX (Type) | $X | $X | +/-$X | X |
+
+### 10. 💡 Banking Insights
+- 2-3 bullet points about account activity patterns
+
+### 11. 📈 Month-over-Month Comparison
+| Metric | [Previous Month] | [Current Month] | Change | % Change |
+|--------|-----------------|-----------------|--------|----------|
+| Income | $X | $X | +/-$X | +/-X% |
+| Expenses | $X | $X | +/-$X | +/-X% |
+| Net | $X | $X | +/-$X | +/-X% |
+| Transactions | X | X | +/-X | +/-X% |
+
+### 12. 🔍 Analysis
+A paragraph explaining the key trends and what the numbers mean in context.
+
+### 13. 💭 Key Observations & Recommendations
+
+**⚠️ Concerns**
+- 2-3 bullet points about potential issues
+
+**✅ Strengths**
+- 2-3 bullet points about positive aspects
+
+**📋 Recommendations**
+- 3-5 actionable recommendations based on the data
+
+### 14. Footer
+```
+---
+**Report Generated:** [Month Year] Data | [X] Transactions Analyzed
+```
+
+## Important Guidelines
+- Use emojis for section headers as shown above
+- Include transaction counts wherever possible
+- Show percentages for context
+- Use meaningful account labels from financial context (not raw IDs)
+- Calculate and show "Top X Total" as percentage of all expenses
+- Provide specific, actionable insights
+- The report should be as comprehensive as needed - no character limit
+- Use tables for all data presentation
+- Include both USD and AUD values for investments (use ~1.51 AUD/USD rate)
+- Credit card spending detail is a priority section - be thorough"""
 
 def get_user_prompt() -> str:
     """
