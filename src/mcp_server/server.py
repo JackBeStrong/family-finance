@@ -36,15 +36,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.database.postgres_repository import PostgresRepository
 from src.mcp_server.context_store import FinancialContextStore
 
-# Configure logging with DEBUG level for development
+# Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Also set MCP SDK logging to DEBUG
-logging.getLogger("mcp").setLevel(logging.DEBUG)
+# Set MCP SDK logging to WARNING to reduce noise
+logging.getLogger("mcp").setLevel(logging.WARNING)
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -781,7 +781,7 @@ Use this to understand property-related transactions like mortgage interest.""",
         logger.info(f"Starting MCP server on http://{host}:{port}")
         logger.info(f"SSE endpoint: http://{host}:{port}/sse")
         logger.info(f"Messages endpoint: http://{host}:{port}/messages/")
-        config = uvicorn.Config(app, host=host, port=port, log_level="debug")
+        config = uvicorn.Config(app, host=host, port=port, log_level="info")
         server = uvicorn.Server(config)
         await server.serve()
     

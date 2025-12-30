@@ -25,5 +25,4 @@ anthropic:
 
 logger:
   transports: [console]
-  # Set to debug to see raw MCP tool call results
-  level: debug
+  level: info

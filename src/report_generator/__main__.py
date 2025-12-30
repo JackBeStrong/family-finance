@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 # Get IBKR Flex Query ID from environment (default to the configured query)
 IBKR_FLEX_QUERY_ID = os.environ.get("IBKR_FLEX_QUERY_ID", "1359561")
 
-# System prompt for the financial analyst agent
-SYSTEM_PROMPT = f"""You are a financial analyst assistant for a family finance tracking system.
+# Base system prompt for the financial analyst agent
+BASE_SYSTEM_PROMPT = """You are a financial analyst assistant for a family finance tracking system.
 You have access to tools that can query a database containing bank transactions from multiple accounts,
 as well as tools to query investment portfolio data from Interactive Brokers.
 
@@ -54,7 +54,17 @@ IMPORTANT: Your response will be sent directly as an email report. Do NOT includ
 - Any thinking or reasoning about what you're doing
 - Any closing remarks like "Let me know if you need anything else"
 
-ONLY output the final formatted report. Nothing else.
+ONLY output the final formatted report sections. Nothing else."""
+
+# System prompt for PART 1: Summary, Credit Card, Investment Portfolio
+SYSTEM_PROMPT_PART1 = f"""{BASE_SYSTEM_PROMPT}
+
+## Your Task: Generate PART 1 of the Monthly Financial Report
+
+You are generating the FIRST HALF of a comprehensive financial report. Focus on:
+- Executive Summary
+- Credit Card Spending (DETAILED - this is the most important section)
+- Investment Portfolio
 
 ## Step 1: Understand the Financial Context
 
@@ -64,45 +74,32 @@ BEFORE generating the report, ALWAYS call `get_financial_context` first. This pr
 - Properties with addresses (if any)
 - Known entities (employers, property managers, etc.)
 - Category rules for proper transaction classification
-- Reporting preferences
 
-Use this context to provide meaningful labels instead of raw account IDs or generic categories.
+Use this context to provide meaningful labels instead of raw account IDs.
 
 ## Step 2: Get Investment Portfolio Data (REQUIRED)
 
-**THIS IS MANDATORY** - You MUST call `get_flex_query` with queryId="{IBKR_FLEX_QUERY_ID}" to get investment portfolio data from Interactive Brokers.
+**THIS IS MANDATORY** - You MUST call `get_flex_query` with queryId="{IBKR_FLEX_QUERY_ID}" to get investment portfolio data.
 
 This provides:
-- Account information and total NAV (Net Asset Value) in the `ChangeInNAV` section (look for `endingValue`)
+- Account information and total NAV in the `ChangeInNAV` section (look for `endingValue`)
 - Current positions in `OpenPositions` with cost basis and unrealized P&L (look for `levelOfDetail: "SUMMARY"` entries)
 - Recent trades in `Trades` section
 - Dividends and interest in `CashTransactions` section
 - Cash balances in `CashReport` section
 
-**The Investment Portfolio section MUST appear in the final report.** If the tool call fails, note that in the report.
+## Step 3: Get Credit Card Transactions
 
-## Step 3: Enrich Transaction Categories
+Use `query_transactions` with the credit card account_id (from financial context) to get ALL credit card transactions for the month.
+This is the most important data - we want to see every transaction.
 
-When you encounter transactions with generic categories (like "INT" for interest):
-1. Use `get_account_context` with the account_id to understand what type of account it is
-2. If it's a mortgage account, the context will include the linked property address
-3. Report these transactions with meaningful labels (e.g., "Mortgage Interest - [Property Address]")
+## Step 4: Get Summary Data
 
-Similarly, use `get_property_context` to understand all accounts linked to a property.
-
-## Step 4: Gather Bank Transaction Data
-
-Use these tools to gather comprehensive data:
+Use these tools:
 1. get_monthly_summary - for income/expense totals
-2. get_spending_by_category - for ALL spending patterns (not just top 5)
-3. get_top_merchants - for top 10 merchants/expenses
-4. get_transactions_by_bank - for per-bank breakdown with all accounts
-5. get_month_comparison - for month-over-month comparison
-6. query_transactions - to get detailed credit card transactions (filter by account_id for credit cards)
+2. get_month_comparison - for month-over-month changes
 
-## Report Format (FOLLOW THIS EXACT STRUCTURE WITH EMOJIS)
-
-Format your report in clean markdown with these sections IN THIS ORDER:
+## Report Format for PART 1 (FOLLOW EXACTLY)
 
 ### 1. Title and Header
 ```
@@ -125,9 +122,8 @@ Format your report in clean markdown with these sections IN THIS ORDER:
 - Notable income/expense changes
 - Any unusual transactions or patterns
 
-### 4. 💳 Credit Card Spending Detail (HIGH PRIORITY)
-Use `query_transactions` with the credit card account_id (from financial context) to get all credit card transactions.
-This is one of the most important sections - show detailed daily spending.
+### 4. 💳 Credit Card Spending Detail (MOST IMPORTANT - BE THOROUGH)
+Use `query_transactions` with the credit card account_id to get ALL credit card transactions.
 
 **Credit Card Summary:**
 - Total Spend: $X
@@ -135,36 +131,74 @@ This is one of the most important sections - show detailed daily spending.
 - Average Transaction: $X
 - Largest Transaction: $X (description)
 
-**Transaction Details:**
+**All Transactions:**
 | Date | Description | Amount | Category |
 |------|-------------|--------|----------|
-| XX/XX | XXX | $X | XXX |
+(List ALL transactions - do not truncate)
 
 **Spending Analysis:**
 Group and analyze the transactions:
-- 🍽️ Dining/Restaurants: $X (X transactions)
+- 🍽️ Dining/Restaurants: $X (X transactions) - list major ones
 - 🛒 Groceries: $X (X transactions)
-- 🛍️ Shopping: $X (X transactions)
-- 🔄 Subscriptions: $X (list them)
+- 🛍️ Shopping: $X (X transactions) - list major purchases
+- 🔄 Subscriptions: $X (list each subscription)
 - ⛽ Transport/Fuel: $X (X transactions)
 - 🎬 Entertainment: $X (X transactions)
+- 💡 Utilities: $X (X transactions)
+- 🏥 Healthcare: $X (X transactions)
 - Other: $X
 
 Highlight any unusual or large purchases.
 
 ### 5. 📈 Investment Portfolio (REQUIRED)
-**Total Portfolio Value:** $X USD (~$X AUD)
+**Total Portfolio Value:** $X USD (~$X AUD at 1.51 rate)
 
 | Symbol | Shares | Market Value (USD) | Cost Basis (USD) | Unrealized P&L (USD) |
 |--------|--------|-------------------|------------------|---------------------|
 | XXX | X | $X | $X | +/-$X (+/-X%) |
 
-**Dividend Income (Month):** $X USD
+**Cash Position:** $X USD
+
+**Portfolio Composition:**
+- Breakdown by holding with percentages
+
+**Trading Activity (if any):**
+- Realized gains/losses from trades
+
+**Dividend Income:** $X USD
 - Breakdown by symbol
 
-**Realized Gains:** $X USD (if any trades)
-
 **Interest Income:** $X USD (if any)
+
+---
+END OF PART 1 - Part 2 will continue with spending categories, merchants, and recommendations.
+"""
+
+# System prompt for PART 2: Categories, Merchants, Bank Activity, Recommendations
+SYSTEM_PROMPT_PART2 = f"""{BASE_SYSTEM_PROMPT}
+
+## Your Task: Generate PART 2 of the Monthly Financial Report
+
+You are generating the SECOND HALF of a comprehensive financial report. Focus on:
+- Spending by Category (all accounts)
+- Top Merchants
+- Bank Account Activity
+- Month-over-Month Comparison
+- Analysis and Recommendations
+
+## Step 1: Understand the Financial Context
+
+Call `get_financial_context` first to understand account labels and purposes.
+
+## Step 2: Gather Data
+
+Use these tools:
+1. get_spending_by_category - for ALL spending patterns
+2. get_top_merchants - for top 10 merchants
+3. get_transactions_by_bank - for per-bank breakdown
+4. get_month_comparison - for month-over-month comparison
+
+## Report Format for PART 2 (FOLLOW EXACTLY)
 
 ### 6. 💰 Spending Breakdown by Category (All Accounts)
 | Category | Amount | % of Total | Transactions |
@@ -225,29 +259,8 @@ A paragraph explaining the key trends and what the numbers mean in context.
 - Use meaningful account labels from financial context (not raw IDs)
 - Calculate and show "Top X Total" as percentage of all expenses
 - Provide specific, actionable insights
-- The report should be as comprehensive as needed - no character limit
 - Use tables for all data presentation
-- Include both USD and AUD values for investments (use ~1.51 AUD/USD rate)
-- Credit card spending detail is a priority section - be thorough"""
-
-def get_user_prompt() -> str:
-    """
-    Generate the user prompt with the target month (last month).
-    
-    Since reports are typically generated at the start of a new month,
-    we want to report on the previous month which has complete data.
-    """
-    # Calculate last month
-    today = datetime.now()
-    last_month = today - relativedelta(months=1)
-    month_name = last_month.strftime("%B")  # e.g., "November"
-    year = last_month.year
-    month_num = last_month.month
-    
-    return f"""Generate a comprehensive monthly financial report for {month_name} {year} (month {month_num}).
-
-Use get_monthly_summary with year={year} and month={month_num} to get the data.
-Include spending analysis, category breakdown, top merchants, and comparison with the previous month ({(last_month - relativedelta(months=1)).strftime('%B %Y')})."""
+"""
 
 def setup_ibkr_environment():
     """
@@ -323,20 +336,25 @@ def clean_report(report: str) -> str:
     return result
 
 
-async def generate_report() -> str:
+async def generate_report_part(system_prompt: str, user_prompt: str, part_name: str) -> str:
     """
-    Generate a financial report using the MCP agent.
+    Generate a part of the financial report using the MCP agent.
+    
+    Args:
+        system_prompt: The system prompt for this part
+        user_prompt: The user prompt for this part
+        part_name: Name of the part for logging
     
     Returns:
-        The generated report as markdown string.
+        The generated report part as markdown string.
     """
     async with app.run() as running_app:
-        logger.info("MCPApp started, creating agent...")
+        logger.info(f"MCPApp started for {part_name}, creating agent...")
         
         # Create the financial analyst agent
         agent = Agent(
-            name="finance_analyst",
-            instruction=SYSTEM_PROMPT,
+            name=f"finance_analyst_{part_name}",
+            instruction=system_prompt,
             server_names=["family-finance", "interactive-brokers"],
         )
         
@@ -344,17 +362,90 @@ async def generate_report() -> str:
             # List available tools for logging
             tools = await agent.list_tools()
             tool_names = [t[0] if isinstance(t, tuple) else getattr(t, 'name', str(t)) for t in tools]
-            logger.info(f"Agent has access to tools: {tool_names}")
+            logger.info(f"Agent ({part_name}) has access to {len(tool_names)} tools")
             
             # Attach the Anthropic LLM (uses model from mcp_agent.config.yaml)
             llm = await agent.attach_llm(AnthropicAugmentedLLM)
             
-            # Generate the report
-            user_prompt = get_user_prompt()
-            logger.info(f"Generating financial report with prompt: {user_prompt[:100]}...")
-            report = await llm.generate_str(message=user_prompt)
+            # Generate the report part
+            logger.info(f"Generating {part_name}...")
+            report_part = await llm.generate_str(message=user_prompt)
             
-            return report
+            return report_part
+
+
+async def generate_report() -> str:
+    """
+    Generate a comprehensive financial report in two parts to avoid token limits.
+    
+    Part 1: Executive Summary, Credit Card Details, Investment Portfolio
+    Part 2: Spending Categories, Merchants, Bank Activity, Recommendations
+    
+    Returns:
+        The combined report as markdown string.
+    """
+    # Calculate target month
+    today = datetime.now()
+    last_month = today - relativedelta(months=1)
+    month_name = last_month.strftime("%B")
+    year = last_month.year
+    month_num = last_month.month
+    prev_month_name = (last_month - relativedelta(months=1)).strftime('%B %Y')
+    
+    # User prompt for Part 1
+    user_prompt_part1 = f"""Generate PART 1 of the monthly financial report for {month_name} {year} (month {month_num}).
+
+This part should include:
+1. Title and Executive Summary
+2. Key Highlights
+3. Credit Card Spending Detail (ALL transactions - this is the most important section)
+4. Investment Portfolio
+
+Use get_monthly_summary with year={year} and month={month_num} to get totals.
+Use query_transactions with the credit card account_id to get ALL credit card transactions.
+Use get_flex_query to get investment portfolio data.
+
+Be thorough with the credit card section - list every transaction."""
+
+    # User prompt for Part 2
+    user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
+
+This part should include:
+6. Spending Breakdown by Category (all accounts)
+7. Category Insights
+8. Top 10 Merchants
+9. Activity by Bank & Account
+10. Banking Insights
+11. Month-over-Month Comparison (vs {prev_month_name})
+12. Analysis
+13. Key Observations & Recommendations
+14. Footer
+
+Use get_spending_by_category, get_top_merchants, get_transactions_by_bank, and get_month_comparison with year={year} and month={month_num}."""
+
+    # Generate Part 1
+    logger.info("=" * 40)
+    logger.info("Generating Part 1: Summary, Credit Card, Investments")
+    logger.info("=" * 40)
+    part1 = await generate_report_part(SYSTEM_PROMPT_PART1, user_prompt_part1, "part1")
+    logger.info(f"Part 1 generated ({len(part1)} chars)")
+    
+    # Generate Part 2
+    logger.info("=" * 40)
+    logger.info("Generating Part 2: Categories, Merchants, Recommendations")
+    logger.info("=" * 40)
+    part2 = await generate_report_part(SYSTEM_PROMPT_PART2, user_prompt_part2, "part2")
+    logger.info(f"Part 2 generated ({len(part2)} chars)")
+    
+    # Combine the parts
+    # Remove the "END OF PART 1" marker if present
+    part1_cleaned = re.sub(r'---\s*END OF PART 1.*$', '', part1, flags=re.DOTALL).strip()
+    
+    # Combine
+    combined_report = f"{part1_cleaned}\n\n{part2}"
+    logger.info(f"Combined report: {len(combined_report)} chars")
+    
+    return combined_report
 
 
 def main():
