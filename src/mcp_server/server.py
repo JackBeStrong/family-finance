@@ -634,7 +634,6 @@ class FamilyFinanceMCP:
         """Run the server with SSE transport (for remote access)."""
         from starlette.applications import Starlette
         from starlette.routing import Route
-        from starlette.responses import JSONResponse, Response
         from starlette.middleware import Middleware
         from starlette.middleware.errors import ServerErrorMiddleware
         import uvicorn
@@ -659,29 +658,28 @@ class FamilyFinanceMCP:
                 raise
         
         async def handle_messages(request):
-            """Handle POST messages - delegate to SSE transport."""
+            """Handle POST messages - delegate to SSE transport.
+            
+            Note: handle_post_message sends its own HTTP response via the ASGI send callable,
+            so we must NOT return a Response object (that would cause duplicate response error).
+            """
             client_ip = request.client.host if request.client else "unknown"
             session_id = request.query_params.get("session_id", "unknown")
             logger.debug(f"POST /messages/ from {client_ip}, session={session_id}")
             try:
                 await sse_transport.handle_post_message(request.scope, request.receive, request._send)
                 logger.debug(f"POST /messages/ completed for session={session_id}")
-                # Return empty response - the transport already sent the response
-                return Response(status_code=202)
+                # Do NOT return a Response - handle_post_message already sent one via ASGI
             except Exception as e:
                 error_trace = traceback.format_exc()
                 logger.error(f"Message handler error for session={session_id}:\n{error_trace}")
                 raise
-        
-        async def health_check(request):
-            return JSONResponse({"status": "healthy", "service": "family-finance-mcp"})
         
         # Add error handling middleware
         app = Starlette(
             routes=[
                 Route("/sse", handle_sse),
                 Route("/messages/", handle_messages, methods=["POST"]),
-                Route("/health", health_check),
             ],
             middleware=[
                 Middleware(ServerErrorMiddleware, debug=True)
@@ -691,7 +689,6 @@ class FamilyFinanceMCP:
         logger.info(f"Starting MCP server on http://{host}:{port}")
         logger.info(f"SSE endpoint: http://{host}:{port}/sse")
         logger.info(f"Messages endpoint: http://{host}:{port}/messages/")
-        logger.info(f"Health endpoint: http://{host}:{port}/health")
         config = uvicorn.Config(app, host=host, port=port, log_level="debug")
         server = uvicorn.Server(config)
         await server.serve()
