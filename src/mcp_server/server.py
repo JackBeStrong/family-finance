@@ -633,14 +633,14 @@ class FamilyFinanceMCP:
     async def run_sse(self, host: str = "0.0.0.0", port: int = 8080):
         """Run the server with SSE transport (for remote access)."""
         from starlette.applications import Starlette
-        from starlette.routing import Route
-        from starlette.middleware import Middleware
-        from starlette.middleware.errors import ServerErrorMiddleware
+        from starlette.routing import Route, Mount
+        from starlette.responses import Response
         import uvicorn
         
         sse_transport = SseServerTransport("/messages/")
         
         async def handle_sse(request):
+            """Handle SSE connections - this is where clients connect to receive events."""
             client_ip = request.client.host if request.client else "unknown"
             logger.info(f"SSE connection from {client_ip}")
             try:
@@ -656,34 +656,17 @@ class FamilyFinanceMCP:
                 error_trace = traceback.format_exc()
                 logger.error(f"SSE handler error for {client_ip}:\n{error_trace}")
                 raise
+            return Response()
         
-        async def handle_messages(request):
-            """Handle POST messages - delegate to SSE transport.
-            
-            Note: handle_post_message sends its own HTTP response via the ASGI send callable,
-            so we must NOT return a Response object (that would cause duplicate response error).
-            """
-            client_ip = request.client.host if request.client else "unknown"
-            session_id = request.query_params.get("session_id", "unknown")
-            logger.debug(f"POST /messages/ from {client_ip}, session={session_id}")
-            try:
-                await sse_transport.handle_post_message(request.scope, request.receive, request._send)
-                logger.debug(f"POST /messages/ completed for session={session_id}")
-                # Do NOT return a Response - handle_post_message already sent one via ASGI
-            except Exception as e:
-                error_trace = traceback.format_exc()
-                logger.error(f"Message handler error for session={session_id}:\n{error_trace}")
-                raise
-        
-        # Add error handling middleware
+        # Standard MCP SSE setup following official examples:
+        # - /sse endpoint: Route handler for SSE connections
+        # - /messages/ endpoint: Mount the handle_post_message directly as ASGI app
         app = Starlette(
+            debug=True,
             routes=[
-                Route("/sse", handle_sse),
-                Route("/messages/", handle_messages, methods=["POST"]),
+                Route("/sse", endpoint=handle_sse, methods=["GET"]),
+                Mount("/messages/", app=sse_transport.handle_post_message),
             ],
-            middleware=[
-                Middleware(ServerErrorMiddleware, debug=True)
-            ]
         )
         
         logger.info(f"Starting MCP server on http://{host}:{port}")
