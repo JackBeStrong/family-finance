@@ -67,17 +67,18 @@ BEFORE generating the report, ALWAYS call `get_financial_context` first. This pr
 
 Use this context to provide meaningful labels instead of raw account IDs or generic categories.
 
-## Step 2: Get Investment Portfolio Data
+## Step 2: Get Investment Portfolio Data (REQUIRED)
 
-Call `get_flex_query` with queryId="{IBKR_FLEX_QUERY_ID}" to get investment portfolio data from Interactive Brokers.
+**THIS IS MANDATORY** - You MUST call `get_flex_query` with queryId="{IBKR_FLEX_QUERY_ID}" to get investment portfolio data from Interactive Brokers.
+
 This provides:
-- Account information and total NAV (Net Asset Value)
-- Current positions with cost basis and unrealized P&L
-- Recent trades
-- Dividends and interest received
-- Cash balances
+- Account information and total NAV (Net Asset Value) in the `ChangeInNAV` section (look for `endingValue`)
+- Current positions in `OpenPositions` with cost basis and unrealized P&L (look for `levelOfDetail: "SUMMARY"` entries)
+- Recent trades in `Trades` section
+- Dividends and interest in `CashTransactions` section
+- Cash balances in `CashReport` section
 
-Include a summary of investment performance in the report.
+**The Investment Portfolio section MUST appear in the final report.** If the tool call fails, note that in the report.
 
 ## Step 3: Enrich Transaction Categories
 
@@ -91,28 +92,39 @@ Similarly, use `get_property_context` to understand all accounts linked to a pro
 ## Step 4: Gather Bank Transaction Data
 
 Use these tools to gather data:
-1. get_available_months - to find the most recent month with data
-2. get_monthly_summary - for income/expense totals
-3. get_spending_by_category - for spending patterns
-4. get_top_merchants - for major expenses
-5. get_month_comparison - for month-over-month comparison
-6. get_transactions_by_bank - for per-bank breakdown
-7. query_transactions - for detailed transaction data when needed
+1. get_monthly_summary - for income/expense totals
+2. get_spending_by_category - for spending patterns
+3. get_top_merchants - for major expenses (limit to top 5)
+4. get_transactions_by_bank - for per-bank breakdown
 
-## Report Format
+Keep the bank transaction analysis concise. Focus on key insights, not exhaustive details.
 
-Format your report in clean markdown with:
-- A clear title with the month/year
-- Executive summary with key numbers (including investment portfolio value)
-- **Investment Portfolio Summary** (positions, unrealized P&L, dividends received)
-- Property-related expenses (mortgage interest, etc.) broken down by property if applicable
-- Spending breakdown by category (table format)
-- Top merchants/expenses (table format)
-- Activity by bank/account (use account labels from context, not raw IDs)
-- Month-over-month comparison
-- Key observations and recommendations
+## Report Format (FOLLOW THIS ORDER)
 
-Be concise but insightful. Focus on actionable insights. Use tables for data presentation."""
+Format your report in clean markdown with these sections IN THIS ORDER:
+
+1. **Title** - "Monthly Financial Report - [Month Year]"
+
+2. **Executive Summary** - 3-4 bullet points with:
+   - Net cash flow (income - expenses)
+   - Investment portfolio total value
+   - Key highlight of the month
+
+3. **Investment Portfolio** (REQUIRED SECTION)
+   - Total Portfolio Value (from ChangeInNAV.endingValue)
+   - Holdings table: Symbol | Shares | Value | Cost Basis | Unrealized P&L
+   - Dividends received this period
+   - Any realized gains from trades
+
+4. **Bank Account Summary**
+   - Total income and expenses
+   - Net position
+
+5. **Spending by Category** (top 5 categories only, table format)
+
+6. **Key Observations** (2-3 bullet points)
+
+Keep the report concise (under 4000 characters). Focus on insights, not raw data dumps."""
 
 def get_user_prompt() -> str:
     """
