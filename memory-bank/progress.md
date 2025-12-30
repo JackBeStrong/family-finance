@@ -168,20 +168,57 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 - `config/financial-context.yaml` - User's financial structure (YAML)
 - `src/mcp_server/context_store.py` - Context store module
 
-## Phase 4: Transaction Categorization (Future)
+## Phase 4: IBKR Investment Portfolio Integration ✓ COMPLETE
+
+### Completed Tasks
+* [2025-12-30 23:47:00 AEDT] - Researched IBKR MCP options (Gateway API vs Flex Queries)
+* [2025-12-30 23:47:00 AEDT] - Chose `interactive-brokers-mcp` npm package with Flex Query API
+* [2025-12-30 23:47:00 AEDT] - Created Flex Query "reporting1" (ID: 1359561) in IBKR portal
+* [2025-12-30 23:47:00 AEDT] - Optimized Flex Query (removed ConversionRates - was 12,207 entries)
+* [2025-12-30 23:47:00 AEDT] - Added IBKR MCP to `.roo/mcp.json` and `mcp_agent.config.yaml`
+* [2025-12-30 23:47:00 AEDT] - Updated `Dockerfile.report` with Node.js 20 for `npx` support
+* [2025-12-30 23:47:00 AEDT] - Fixed env var expansion issue (mcp-agent doesn't expand `${VAR}` in env blocks)
+* [2025-12-30 23:47:00 AEDT] - Implemented monkey-patch for `get_default_environment()` to pass `IB_FLEX_TOKEN`
+* [2025-12-30 23:47:00 AEDT] - Updated report generator system prompt to include investment portfolio section
+* [2025-12-30 23:47:00 AEDT] - Deployed and verified: Report now includes portfolio value, holdings, dividends, realized gains
+
+### IBKR Integration Details
+- **MCP Package**: `interactive-brokers-mcp` (npm)
+- **Transport**: stdio via `npx -y interactive-brokers-mcp`
+- **API**: Flex Query (token-based, no 2FA per request)
+- **Flex Query ID**: 1359561 ("reporting1")
+- **Token**: Stored in Ansible vault as `ibkr_flex_token`
+
+### Report Investment Section Includes
+- Total Portfolio Value (NAV)
+- Holdings table: Symbol, Shares, Market Value, Cost Basis, Unrealized P&L
+- Dividend income breakdown by symbol
+- Realized gains from trades
+- Interest income on cash balances
+
+### Sample Report Output (2025-12-30)
+```
+Investment Portfolio Value: $260,888 USD (~$393,454 AUD)
+Holdings: QQQM (792 shares, +$2,353 unrealized), SOXX (189 shares, -$755 unrealized)
+Dividends: $338.28 USD (QQQM: $255.82, SOXX: $82.46)
+Realized Gains: +$4,453.93 USD from AMZN trade
+```
+
+## Phase 5: Transaction Categorization (Future)
 
 * [ ] Add more category rules to financial-context.yaml
 * [ ] Implement rule-based auto-categorization at import time
 * [ ] Add manual category assignment UI
 
-## Phase 4: Home Loan Management (Future)
+## Phase 6: Home Loan Management (Future)
 
 * [ ] Mortgage tracking
 * [ ] Extra payment calculations
 * [ ] Interest savings projections
 
-## Phase 5: Investment & Planning (Future)
+## Phase 7: Advanced Investment Features (Future)
 
-* [ ] Investment portfolio tracking
+* [x] Investment portfolio tracking → Done via IBKR integration
 * [ ] Goal-based savings plans
 * [ ] Long-term financial projections
+* [ ] Portfolio performance over time (weekly/monthly/yearly returns)

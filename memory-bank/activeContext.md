@@ -7,10 +7,12 @@ This file tracks the project's current status, including recent changes, current
 * **Phase 1 Complete**: Bank statement import system is fully operational
 * **Phase 2 Complete**: MCP server deployed with 12 tools (9 original + 3 context tools)
 * **Phase 3 Complete**: Financial Context Store for better categorization
+* **Phase 4 Complete**: IBKR Investment Portfolio Integration
 * System is running in production on LXC container
 * 768 transactions imported from 5 banks
 * MCP server exposing 12 tools for AI-powered reporting
 * Report generator using financial context for enriched categorization
+* **NEW**: Monthly reports now include IBKR investment portfolio data
 
 ## System Status
 
@@ -129,6 +131,10 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-30 20:39:00 AEDT] - Report generator now reports on last month (not current month) for complete data
 * [2025-12-30 20:39:00 AEDT] - Email sender now supports multiple comma-separated recipients (for future use)
 * [2025-12-30 20:59:00 AEDT] - Added November 2025 refinance details to financial-context.yaml (all 3 properties)
+* [2025-12-30 23:47:00 AEDT] - **IBKR Integration Complete**: Added Interactive Brokers investment portfolio to monthly reports
+* [2025-12-30 23:47:00 AEDT] - Using `interactive-brokers-mcp` npm package with Flex Query API
+* [2025-12-30 23:47:00 AEDT] - Fixed mcp-agent env var expansion issue via monkey-patch of get_default_environment()
+* [2025-12-30 23:47:00 AEDT] - Reports now include: Portfolio value, holdings, dividends, realized gains
 
 ## Key Files
 

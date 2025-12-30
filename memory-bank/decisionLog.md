@@ -4,6 +4,60 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2025-12-30 23:47:00 AEDT] - Interactive Brokers Integration via Flex Queries
+
+### Decision
+Integrated Interactive Brokers (IBKR) investment portfolio data into the monthly financial report using the `interactive-brokers-mcp` npm package with Flex Query API.
+
+### Context
+- User has share investments in IBKR
+- Need to include portfolio value, holdings, dividends, and realized gains in monthly reports
+- IBKR has multiple API options: Gateway API (requires 2FA), Flex Queries (token-based)
+
+### Rationale
+- **Flex Queries over Gateway API**: No 2FA required per request, uses token authentication
+- **NPM package over custom MCP**: `interactive-brokers-mcp` already exists and works well
+- **Stdio transport**: Spawned on-demand via `npx`, no persistent server needed
+
+### Implementation
+1. **Flex Query Setup** (IBKR Portal):
+   - Created Flex Query "reporting1" (ID: 1359561)
+   - Sections: AccountInformation, ChangeInNAV, OpenPositions, Trades, CashTransactions, CashReport
+   - Removed ConversionRates (was 12,207 entries causing bloat)
+
+2. **MCP Configuration**:
+   - Added `interactive-brokers-mcp` to `.roo/mcp.json` and `mcp_agent.config.yaml`
+   - Transport: stdio via `npx -y interactive-brokers-mcp`
+
+3. **Environment Variable Handling**:
+   - `IB_FLEX_TOKEN` passed via Docker environment
+   - **Key Fix**: mcp-agent's YAML config doesn't expand `${VAR}` in env blocks
+   - Solution: Monkey-patch `mcp.client.stdio.get_default_environment()` to include `IB_FLEX_TOKEN`
+
+4. **Dockerfile Changes**:
+   - Added Node.js 20 to `Dockerfile.report` for `npx` support
+
+### Key Files Modified
+- `src/report_generator/__main__.py` - Added `setup_ibkr_environment()` function
+- `mcp_agent.config.yaml` - Added interactive-brokers server config
+- `Dockerfile.report` - Added Node.js 20
+- Ansible playbook - Added `IB_FLEX_TOKEN` to Docker environment
+
+### Report Output
+The report now includes:
+- Total Portfolio Value (from ChangeInNAV.endingValue)
+- Holdings table with cost basis and unrealized P&L
+- Dividend income breakdown by symbol
+- Realized gains from trades
+- Interest income on cash balances
+
+### Implications
+- Monthly reports now provide complete financial picture (bank + investments)
+- Flex Query token needs to be kept secure (24-char alphanumeric)
+- Token stored in Ansible vault as `ibkr_flex_token`
+
+---
+
 ## [2025-12-30 20:20:00 AEDT] - Financial Context Store for Better Categorization
 
 ### Decision
