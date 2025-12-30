@@ -21,4 +21,5 @@ COPY src/ src/
 COPY mcp_agent.config.yaml .
 
 # Run the report generator
-CMD ["python", "-m", "src.report_generator"]
+# Using ENTRYPOINT so that command-line arguments are appended (not replaced)
+ENTRYPOINT ["python", "-m", "src.report_generator"]
