@@ -1,0 +1,20 @@
+# mcp-agent configuration for Family Finance Report Generator
+# See: https://docs.mcp-agent.com/
+
+execution_engine: asyncio
+
+mcp:
+  servers:
+    family-finance:
+      transport: sse
+      url: "http://192.168.1.237:8080/sse"
+
+anthropic:
+  default_model: claude-sonnet-4-5
+  # Max output tokens for Claude Sonnet 4.5 is 64K
+  default_request_params:
+    max_tokens: 64000
+
+logger:
+  transports: [console]
+  level: info
