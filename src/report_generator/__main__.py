@@ -126,25 +126,36 @@ Use these tools:
 Use `query_transactions` with the credit card account_id to get credit card transactions.
 
 **Credit Card Summary:**
-- Total Spend: $X
-- Number of Transactions: X
-- Average Transaction: $X
 
-**Top 5 Largest Transactions:**
+| Metric | Value |
+|--------|-------|
+| Total Spend | $X |
+| Transactions | X |
+| Average | $X |
+
+**Top 5 Largest Purchases:**
+
 | Date | Description | Amount |
 |------|-------------|--------|
-(Show only the 5 biggest purchases)
+| Nov XX | XXX | $X |
+| Nov XX | XXX | $X |
+| Nov XX | XXX | $X |
+| Nov XX | XXX | $X |
+| Nov XX | XXX | $X |
 
 **Spending by Category:**
-- 🍽️ Dining/Restaurants: $X (X transactions)
-- 🛒 Groceries: $X (X transactions)
-- 🛍️ Shopping: $X (X transactions)
-- 🔄 Subscriptions: $X (list each one)
-- ⛽ Transport/Fuel: $X (X transactions)
-- 🎬 Entertainment: $X (X transactions)
-- 💡 Utilities: $X (X transactions)
-- 🏥 Healthcare: $X (X transactions)
-- Other: $X
+
+| Category | Amount | Count |
+|----------|--------|-------|
+| 🍽️ Dining | $X | X |
+| 🛒 Groceries | $X | X |
+| 🛍️ Shopping | $X | X |
+| 🔄 Subscriptions | $X | X |
+| ⛽ Transport | $X | X |
+| 🎬 Entertainment | $X | X |
+| 💡 Utilities | $X | X |
+| 🏥 Healthcare | $X | X |
+| Other | $X | X |
 
 ### 5. 📈 Investment Portfolio (REQUIRED)
 **Total Portfolio Value:** $X USD (~$X AUD at 1.51 rate)
@@ -231,6 +242,11 @@ Use these tools:
 - Be concise - avoid verbose explanations
 - Use meaningful account labels from financial context (not raw IDs)
 - Provide specific, actionable insights
+- **CRITICAL: Use proper markdown tables** - every table must have:
+  - Header row with | separators
+  - Separator row with |---|---|
+  - Data rows with | separators
+  - NO nested bullet lists inside tables
 """
 
 def setup_ibkr_environment():
