@@ -113,6 +113,7 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-30 16:45:00 AEDT] - Fixed IP conflict (iPhone had same IP)
 * [2025-12-30 16:45:00 AEDT] - Fixed router DHCP range (2-199)
 * [2025-12-30 16:50:00 AEDT] - All 9 MCP tools verified working
+* [2025-12-30 18:15:00 AEDT] - Fixed report email: added clean_report() to strip [Calling tool...] artifacts from AI output
 
 ## Key Files
 

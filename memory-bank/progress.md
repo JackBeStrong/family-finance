@@ -72,7 +72,7 @@ ssh root@192.168.1.237 docker logs -f family-finance
 psql -h 192.168.1.228 -U readonly -d family_finance
 ```
 
-## Phase 2: Reporting & Analysis (In Progress)
+## Phase 2: Reporting & Analysis ✓ COMPLETE
 
 ### MCP Server for Database Access ✓ COMPLETE
 * [2025-12-30 10:45:00 AEDT] - Created MCP server (`src/mcp_server/server.py`)
@@ -103,10 +103,32 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 | `query_transactions` | Flexible filtered queries |
 | `execute_sql` | Raw SELECT queries (read-only) |
 
-### Remaining Tasks
-* [ ] Create monthly report template and system prompt
-* [ ] Build automated report generation pipeline
-* [ ] Implement trend visualization
+### AI Report Generator ✓ COMPLETE
+* [2025-12-30 17:59:00 AEDT] - Built agentic AI report generator using `mcp-agent` library
+* [2025-12-30 17:59:00 AEDT] - Uses Claude Sonnet 4.5 with 64K max tokens
+* [2025-12-30 17:59:00 AEDT] - Agent autonomously calls MCP tools for data gathering
+* [2025-12-30 17:59:00 AEDT] - Generates markdown reports with HTML email formatting
+* [2025-12-30 17:59:00 AEDT] - Sends via Gmail SMTP to junzhouan@gmail.com
+* [2025-12-30 17:59:00 AEDT] - Deployed to LXC 128 with monthly cron job
+* [2025-12-30 17:59:00 AEDT] - Verified working: 6168 char report generated and emailed
+* [2025-12-30 18:15:00 AEDT] - Fixed: Added clean_report() to strip [Calling tool...] artifacts from email output
+
+### Report Generator Files
+- `src/report_generator/__main__.py` - Entry point using mcp-agent
+- `src/report_generator/email_sender.py` - Gmail SMTP sender
+- `Dockerfile.report` - Docker container
+- `requirements-report.txt` - Dependencies (mcp-agent[anthropic], markdown)
+- `mcp_agent.config.yaml` - MCP agent configuration
+
+### Report Generator Deployment
+- **On-demand script**: `/usr/local/bin/generate-finance-report.sh`
+- **Monthly cron**: `0 8 1 * *` (1st of month at 8am AEDT)
+- **Logs**: `/var/log/finance-report/cron.log`
+
+### Future Enhancements
+* [ ] Refine report prompt for more detailed analysis
+* [ ] Add trend visualization charts
+* [ ] Add budget tracking and alerts
 
 ## Phase 3: Transaction Categorization (Future)
 

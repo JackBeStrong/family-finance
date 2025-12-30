@@ -20,6 +20,7 @@ Environment Variables:
 
 import os
 import sys
+import re
 import asyncio
 import logging
 from datetime import datetime
@@ -41,28 +42,64 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are a financial analyst assistant for a family finance tracking system.
 You have access to tools that can query a database containing bank transactions from multiple accounts.
 
-When generating a monthly financial report:
-1. First, use get_available_months to see what data is available
-2. Use get_monthly_summary to get income/expense totals for the most recent month
-3. Use get_spending_by_category to understand spending patterns
-4. Use get_top_merchants to identify major expenses
-5. Use get_month_comparison to compare with the previous month
+IMPORTANT: Your response will be sent directly as an email report. Do NOT include:
+- Any preamble like "I'll generate a report..." or "Let me check..."
+- Any mention of tool calls like "[Calling tool...]" or "Using get_monthly_summary..."
+- Any thinking or reasoning about what you're doing
+- Any closing remarks like "Let me know if you need anything else"
+
+ONLY output the final formatted report. Nothing else.
+
+When generating the report, silently use these tools to gather data:
+1. get_available_months - to find the most recent month with data
+2. get_monthly_summary - for income/expense totals
+3. get_spending_by_category - for spending patterns
+4. get_top_merchants - for major expenses
+5. get_month_comparison - for month-over-month comparison
+6. get_transactions_by_bank - for per-bank breakdown
 
 Format your report in clean markdown with:
 - A clear title with the month/year
 - Executive summary with key numbers
-- Spending breakdown by category
-- Top merchants/expenses
+- Spending breakdown by category (table format)
+- Top merchants/expenses (table format)
+- Activity by bank/account (table format)
 - Month-over-month comparison
-- Any notable observations or recommendations
+- Key observations and recommendations
 
-Be concise but insightful. Focus on actionable insights."""
+Be concise but insightful. Focus on actionable insights. Use tables for data presentation."""
 
 # User prompt for generating the report
 USER_PROMPT = """Generate a comprehensive monthly financial report for the most recent month with data.
 Include spending analysis, category breakdown, top merchants, and comparison with the previous month."""
 
 app = MCPApp(name="finance_report_generator")
+
+
+def clean_report(report: str) -> str:
+    """
+    Remove tool-calling artifacts from the report.
+    
+    The mcp-agent library sometimes includes [Calling tool...] lines
+    in the output. This function strips them out.
+    """
+    # Remove lines that start with [Calling tool
+    lines = report.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        # Skip lines that are tool call artifacts
+        if line.strip().startswith('[Calling tool'):
+            continue
+        # Skip lines that look like "Perfect!" or "Let me" preambles
+        if re.match(r'^(Perfect!|Great!|Let me|I\'ll|I will|Now let me)', line.strip()):
+            continue
+        cleaned_lines.append(line)
+    
+    # Join and strip leading/trailing whitespace
+    result = '\n'.join(cleaned_lines).strip()
+    
+    return result
 
 
 async def generate_report() -> str:
@@ -108,11 +145,16 @@ def main():
     try:
         # Step 1: Generate report using AI agent with MCP tools
         logger.info("Step 1: Generating report with AI agent...")
-        report_content = asyncio.run(generate_report())
-        logger.info(f"Report generated ({len(report_content)} chars)")
+        raw_report = asyncio.run(generate_report())
+        logger.info(f"Raw report generated ({len(raw_report)} chars)")
         
-        # Step 2: Send email
-        logger.info("Step 2: Sending email...")
+        # Step 2: Clean up the report (remove tool-calling artifacts)
+        logger.info("Step 2: Cleaning report...")
+        report_content = clean_report(raw_report)
+        logger.info(f"Cleaned report ({len(report_content)} chars)")
+        
+        # Step 3: Send email
+        logger.info("Step 3: Sending email...")
         subject = f"Family Finance Report - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
         success = send_report_email(
