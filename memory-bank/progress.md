@@ -151,6 +151,10 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 * [2025-12-30 20:20:00 AEDT] - Updated Ansible playbook to copy config/ directory
 * [2025-12-30 20:20:00 AEDT] - Updated report generator system prompt to use context tools
 * [2025-12-30 20:20:00 AEDT] - Deployed and verified all 12 MCP tools working
+* [2025-12-30 20:59:00 AEDT] - Added November 2025 refinance details to financial-context.yaml:
+  - Full property addresses, ownership percentages, valuations
+  - Mortgage details: current loans, previous loans, LVR, interest rate (5.37%)
+  - Portfolio summary: $3.4M value, $2.49M loans, $910K equity, 73.24% LVR
 
 ### Financial Context Store Features
 - **People**: Household members with aliases for transaction matching
