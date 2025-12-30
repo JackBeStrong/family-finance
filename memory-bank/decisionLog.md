@@ -4,6 +4,45 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2025-12-30 20:20:00 AEDT] - Financial Context Store for Better Categorization
+
+### Decision
+Created a YAML-based Financial Context Store to provide household financial structure to AI for enriched transaction categorization.
+
+### Context
+- Reports showed generic categories like "INT" for mortgage interest
+- User has 3 investment properties with separate mortgages
+- Need to distinguish "Mortgage Interest - 4 Mann Pl" from "Mortgage Interest - 16 Austin Ave"
+- AI needs context about accounts, properties, and their relationships
+
+### Rationale
+- **YAML over JSON**: Human-readable, supports comments, easier manual editing
+- **MCP Tools over Database**: Context is static configuration, not transactional data
+- **AI-Driven Categorization**: Let AI use context at report time rather than categorizing at import time
+- **Flexible Structure**: Supports people, accounts, properties, entities, category rules
+
+### Implementation
+- `config/financial-context.yaml` - User's financial structure
+- `src/mcp_server/context_store.py` - Module to load and query YAML
+- 3 new MCP tools:
+  - `get_financial_context` - Full context or specific section
+  - `get_account_context` - Account with linked property resolved
+  - `get_property_context` - Property with linked accounts resolved
+- Updated report generator system prompt to use context tools
+
+### Key Features
+- **Account-Property Linking**: Mortgage accounts linked to properties via `property_id`
+- **Entity Recognition**: Known employers, landlord agents with aliases for matching
+- **Category Rules**: Pattern-based rules for auto-categorization
+- **Reporting Preferences**: Group by property, exclude transfers, etc.
+
+### Implications
+- AI can now report "Mortgage Interest - 4 Mann Pl: $2,862.30" instead of "INT: $2,862.30"
+- Users can customize their financial structure by editing YAML
+- New accounts/properties can be added without code changes
+
+---
+
 ## [2025-12-29 18:15:00 AEDT] - PostgreSQL for Production Database
 
 ### Decision

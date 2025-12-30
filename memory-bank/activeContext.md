@@ -5,10 +5,12 @@ This file tracks the project's current status, including recent changes, current
 ## Current Focus
 
 * **Phase 1 Complete**: Bank statement import system is fully operational
-* **Phase 2 In Progress**: MCP server deployed and working
+* **Phase 2 Complete**: MCP server deployed with 12 tools (9 original + 3 context tools)
+* **Phase 3 Complete**: Financial Context Store for better categorization
 * System is running in production on LXC container
 * 768 transactions imported from 5 banks
-* MCP server exposing 9 tools for AI-powered reporting
+* MCP server exposing 12 tools for AI-powered reporting
+* Report generator using financial context for enriched categorization
 
 ## System Status
 
@@ -34,7 +36,9 @@ This file tracks the project's current status, including recent changes, current
 }
 ```
 
-**Available Tools**:
+**Available Tools (12 total)**:
+
+*Data Query Tools:*
 - `get_database_stats` - Overall database statistics
 - `get_available_months` - List months with data
 - `get_monthly_summary` - Income/expenses for a month
@@ -44,6 +48,11 @@ This file tracks the project's current status, including recent changes, current
 - `get_month_comparison` - Month-over-month comparison
 - `query_transactions` - Flexible filtered queries
 - `execute_sql` - Raw SELECT queries (read-only)
+
+*Financial Context Tools (NEW):*
+- `get_financial_context` - Full context (people, accounts, properties, entities, category rules)
+- `get_account_context` - Account details with linked property resolved
+- `get_property_context` - Property details with linked accounts resolved
 
 ### How to Deploy/Redeploy
 
@@ -114,13 +123,19 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-30 16:45:00 AEDT] - Fixed router DHCP range (2-199)
 * [2025-12-30 16:50:00 AEDT] - All 9 MCP tools verified working
 * [2025-12-30 18:15:00 AEDT] - Fixed report email: added clean_report() to strip [Calling tool...] artifacts from AI output
+* [2025-12-30 20:20:00 AEDT] - Created Financial Context Store (config/financial-context.yaml)
+* [2025-12-30 20:20:00 AEDT] - Added 3 new MCP tools for context (get_financial_context, get_account_context, get_property_context)
+* [2025-12-30 20:20:00 AEDT] - Updated report generator to use context for enriched categorization
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/watcher.py` | File watcher service (main entry point) |
-| `src/mcp_server/server.py` | MCP server with 9 tools |
+| `src/mcp_server/server.py` | MCP server with 12 tools |
+| `src/mcp_server/context_store.py` | Financial context store (loads YAML config) |
+| `config/financial-context.yaml` | User's financial structure (accounts, properties, entities) |
+| `src/report_generator/__main__.py` | Report generator with context-aware prompts |
 | `src/parsers/factory.py` | Auto-detects bank and parses CSV |
 | `src/database/postgres_repository.py` | PostgreSQL data access |
 | `Dockerfile` | File watcher container |
@@ -131,12 +146,12 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 
 ## Open Questions/Issues
 
-* ~~Transaction categorization - manual, rule-based, or ML-based?~~ (Future phase)
+* ~~Transaction categorization - manual, rule-based, or ML-based?~~ → Solved with Financial Context Store
 * ~~Reporting format - CLI, web dashboard, or export to spreadsheet?~~ → Using AI via MCP
-* ~~Should reports be generated on-demand or scheduled?~~ → On-demand via AI
+* ~~Should reports be generated on-demand or scheduled?~~ → On-demand via AI + Monthly cron
 
 ## Next Steps (Next Session)
 
-1. **Create monthly report template** - Design the report format and system prompt
-2. **Build report generation pipeline** - Automate report creation
-3. **Implement trend visualization** - Charts and graphs
+1. **Implement trend visualization** - Charts and graphs
+2. **Add more category rules** - Expand financial-context.yaml as needed
+3. **Consider web dashboard** - For interactive exploration

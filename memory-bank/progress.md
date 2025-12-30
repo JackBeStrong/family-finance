@@ -90,7 +90,9 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 - **Messages Endpoint**: http://192.168.1.237:8080/messages/
 - **Roo Config**: `.roo/mcp.json`
 
-### Available MCP Tools
+### Available MCP Tools (12 total)
+
+**Data Query Tools:**
 | Tool | Description |
 |------|-------------|
 | `get_database_stats` | Overall stats (total transactions, date range, banks) |
@@ -102,6 +104,13 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 | `get_month_comparison` | Month-over-month comparison |
 | `query_transactions` | Flexible filtered queries |
 | `execute_sql` | Raw SELECT queries (read-only) |
+
+**Financial Context Tools (NEW):**
+| Tool | Description |
+|------|-------------|
+| `get_financial_context` | Full context (people, accounts, properties, entities, category rules) |
+| `get_account_context` | Account details with linked property resolved |
+| `get_property_context` | Property details with linked accounts resolved |
 
 ### AI Report Generator ✓ COMPLETE
 * [2025-12-30 17:59:00 AEDT] - Built agentic AI report generator using `mcp-agent` library
@@ -126,14 +135,37 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 - **Logs**: `/var/log/finance-report/cron.log`
 
 ### Future Enhancements
-* [ ] Refine report prompt for more detailed analysis
+* [x] Refine report prompt for more detailed analysis → Done via Financial Context Store
 * [ ] Add trend visualization charts
 * [ ] Add budget tracking and alerts
 
-## Phase 3: Transaction Categorization (Future)
+## Phase 3: Financial Context Store ✓ COMPLETE
 
-* [ ] Design categorization rules
-* [ ] Implement rule-based auto-categorization
+### Completed Tasks
+* [2025-12-30 20:20:00 AEDT] - Created `config/financial-context.yaml` with user's financial structure
+* [2025-12-30 20:20:00 AEDT] - Created `src/mcp_server/context_store.py` to load and query YAML config
+* [2025-12-30 20:20:00 AEDT] - Added 3 new MCP tools: get_financial_context, get_account_context, get_property_context
+* [2025-12-30 20:20:00 AEDT] - Updated Dockerfile.mcp to include config/ directory
+* [2025-12-30 20:20:00 AEDT] - Updated Ansible playbook to copy config/ directory
+* [2025-12-30 20:20:00 AEDT] - Updated report generator system prompt to use context tools
+* [2025-12-30 20:20:00 AEDT] - Deployed and verified all 12 MCP tools working
+
+### Financial Context Store Features
+- **People**: Household members with aliases for transaction matching
+- **Accounts**: All bank accounts with types, purposes, and property links
+- **Properties**: Investment properties with addresses
+- **Entities**: Known merchants, employers, property managers
+- **Category Rules**: Pattern-based rules for auto-categorization
+- **Reporting Preferences**: Group by property, exclude transfers, etc.
+
+### Key Files
+- `config/financial-context.yaml` - User's financial structure (YAML)
+- `src/mcp_server/context_store.py` - Context store module
+
+## Phase 4: Transaction Categorization (Future)
+
+* [ ] Add more category rules to financial-context.yaml
+* [ ] Implement rule-based auto-categorization at import time
 * [ ] Add manual category assignment UI
 
 ## Phase 4: Home Loan Management (Future)

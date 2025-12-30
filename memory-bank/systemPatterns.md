@@ -3,20 +3,32 @@
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           FAMILY FINANCE SYSTEM                          │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌──────────────┐     ┌──────────────────┐     ┌───────────────────┐   │
-│  │   NAS Share  │────▶│  File Watcher    │────▶│   PostgreSQL DB   │   │
-│  │ (CSV files)  │     │  (LXC Container) │     │  (LXC Container)  │   │
-│  └──────────────┘     └──────────────────┘     └───────────────────┘   │
-│                                                                          │
-│  bank-statements/      192.168.1.237           192.168.1.228            │
-│  └── *.csv             VMID: 128               VMID: 110                │
-│                        Docker: family-finance   DB: family_finance      │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FAMILY FINANCE SYSTEM                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐     ┌──────────────────┐     ┌───────────────────┐       │
+│  │   NAS Share  │────▶│  File Watcher    │────▶│   PostgreSQL DB   │       │
+│  │ (CSV files)  │     │  (LXC Container) │     │  (LXC Container)  │       │
+│  └──────────────┘     └──────────────────┘     └───────────────────┘       │
+│                                                         │                   │
+│  bank-statements/      192.168.1.237           192.168.1.228               │
+│  └── *.csv             VMID: 128               VMID: 110                   │
+│                        Docker: family-finance   DB: family_finance         │
+│                                                         │                   │
+│                       ┌──────────────────┐              │                   │
+│                       │   MCP Server     │◀─────────────┘                   │
+│                       │  (12 tools)      │                                  │
+│                       └────────┬─────────┘                                  │
+│                                │                                            │
+│                       ┌────────▼─────────┐     ┌───────────────────┐       │
+│                       │ Financial Context│     │  Report Generator │       │
+│                       │ Store (YAML)     │◀────│  (AI Agent)       │       │
+│                       └──────────────────┘     └───────────────────┘       │
+│                                                                              │
+│                       config/financial-context.yaml                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Deployment Architecture
@@ -247,5 +259,78 @@ psql -h 192.168.1.228 -U readonly -d family_finance -c "SELECT COUNT(*) FROM tra
 
 ---
 
+## Financial Context Store Pattern
+
+### Purpose
+Provides household financial structure to AI for enriched transaction categorization.
+
+### Architecture
+
+```
+config/
+└── financial-context.yaml    # User's financial structure (YAML)
+
+src/mcp_server/
+├── context_store.py          # FinancialContextStore class
+└── server.py                 # MCP tools that use context store
+```
+
+### YAML Structure
+
+```yaml
+version: "1.0"
+
+people:
+  - id: primary
+    name: "Name"
+    role: primary_account_holder
+    aliases: ["NAME", "N NAME"]
+
+accounts:
+  - account_id: "123456789"
+    bank: westpac
+    type: loan
+    purpose: mortgage
+    property_id: property_1
+    label: "Property Name Mortgage"
+
+properties:
+  - id: property_1
+    address: "123 Main St"
+    type: investment
+
+entities:
+  - id: employer
+    name: "Company Name"
+    type: employer
+    category: income.salary
+    aliases: ["COMPANY NAME PTY"]
+
+category_rules:
+  - name: "Mortgage Interest"
+    pattern: "INTEREST"
+    conditions:
+      original_category: "INT"
+      account_type: "loan"
+    category: expense.mortgage_interest
+```
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_financial_context` | Full context or specific section |
+| `get_account_context` | Account with linked property resolved |
+| `get_property_context` | Property with linked accounts resolved |
+
+### Usage Pattern
+
+1. AI calls `get_financial_context` at start of report generation
+2. When encountering generic categories (e.g., "INT"), AI calls `get_account_context`
+3. AI uses resolved property address for meaningful labels
+
+---
+
 [2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
 [2025-12-29 18:15:00 AEDT] - Added deployment architecture and PostgreSQL patterns
+[2025-12-30 20:20:00 AEDT] - Added Financial Context Store pattern
