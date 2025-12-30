@@ -131,7 +131,7 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 
 ### Report Generator Deployment
 - **On-demand script**: `/usr/local/bin/generate-finance-report.sh`
-- **Monthly cron**: `0 8 1 * *` (1st of month at 8am AEDT)
+- **Monthly cron**: Last day of each month at 11pm AEDT (handles leap years)
 - **Logs**: `/var/log/finance-report/cron.log`
 
 ### Future Enhancements

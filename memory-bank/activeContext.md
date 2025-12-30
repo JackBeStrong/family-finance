@@ -135,6 +135,10 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-30 23:47:00 AEDT] - Using `interactive-brokers-mcp` npm package with Flex Query API
 * [2025-12-30 23:47:00 AEDT] - Fixed mcp-agent env var expansion issue via monkey-patch of get_default_environment()
 * [2025-12-30 23:47:00 AEDT] - Reports now include: Portfolio value, holdings, dividends, realized gains
+* [2025-12-31 09:09:00 AEDT] - **Report Format Improved**: Added section numbers (1-4 for Part 1, 5-8 for Part 2)
+* [2025-12-31 09:09:00 AEDT] - Removed "Activity by Bank & Account" section from report (kept Spending by Category and Top Merchants)
+* [2025-12-31 09:09:00 AEDT] - **Cron Timing Changed**: Report now runs on last day of each month at 11pm (was 1st at 8am)
+* [2025-12-31 09:09:00 AEDT] - Cron handles leap years (Feb 28 for non-leap, Feb 29 for leap years)
 
 ## Key Files
 
