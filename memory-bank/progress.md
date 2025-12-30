@@ -37,13 +37,14 @@ This file tracks the project's progress using a task list format.
 | Component | Location | Status |
 |-----------|----------|--------|
 | File Watcher | LXC 128 (192.168.1.237) | ✓ Running |
+| MCP Server | LXC 128 (192.168.1.237:8080) | ✓ Running |
 | PostgreSQL | LXC 110 (192.168.1.228) | ✓ Running |
 | NFS Mount | Unraid NAS | ✓ Mounted |
 
 ### Data
-- **Total Transactions**: 366
+- **Total Transactions**: 768
 - **Banks Supported**: 5 (ANZ, Bankwest, CBA, Macquarie, Westpac)
-- **Date Range**: Aug 2025 - Dec 2025
+- **Date Range**: Oct 2021 - Dec 2025
 
 ## Deployment Commands
 
@@ -77,6 +78,17 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 * [2025-12-30 10:45:00 AEDT] - Created MCP server (`src/mcp_server/server.py`)
 * [2025-12-30 10:45:00 AEDT] - Implemented 9 tools for querying transaction data
 * [2025-12-30 10:45:00 AEDT] - Tested all tools successfully with Roo
+* [2025-12-30 16:45:00 AEDT] - Deployed MCP server to LXC 128 as Docker container
+* [2025-12-30 16:45:00 AEDT] - Fixed SSE transport (use Mount for /messages/ endpoint)
+* [2025-12-30 16:45:00 AEDT] - Fixed IP conflict (iPhone had same IP as LXC)
+* [2025-12-30 16:45:00 AEDT] - Fixed router DHCP range (was 2-254, now 2-199)
+* [2025-12-30 16:50:00 AEDT] - All 9 MCP tools verified working in production
+
+### MCP Server Configuration
+- **URL**: http://192.168.1.237:8080
+- **SSE Endpoint**: http://192.168.1.237:8080/sse
+- **Messages Endpoint**: http://192.168.1.237:8080/messages/
+- **Roo Config**: `.roo/mcp.json`
 
 ### Available MCP Tools
 | Tool | Description |
