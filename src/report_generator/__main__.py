@@ -50,20 +50,47 @@ IMPORTANT: Your response will be sent directly as an email report. Do NOT includ
 
 ONLY output the final formatted report. Nothing else.
 
-When generating the report, silently use these tools to gather data:
+## Step 1: Understand the Financial Context
+
+BEFORE generating the report, ALWAYS call `get_financial_context` first. This provides:
+- Household members and their roles
+- All accounts with their types and purposes (mortgage, offset, credit card, etc.)
+- Properties with addresses (if any)
+- Known entities (employers, property managers, etc.)
+- Category rules for proper transaction classification
+- Reporting preferences
+
+Use this context to provide meaningful labels instead of raw account IDs or generic categories.
+
+## Step 2: Enrich Transaction Categories
+
+When you encounter transactions with generic categories (like "INT" for interest):
+1. Use `get_account_context` with the account_id to understand what type of account it is
+2. If it's a mortgage account, the context will include the linked property address
+3. Report these transactions with meaningful labels (e.g., "Mortgage Interest - [Property Address]")
+
+Similarly, use `get_property_context` to understand all accounts linked to a property.
+
+## Step 3: Gather Report Data
+
+Use these tools to gather data:
 1. get_available_months - to find the most recent month with data
 2. get_monthly_summary - for income/expense totals
 3. get_spending_by_category - for spending patterns
 4. get_top_merchants - for major expenses
 5. get_month_comparison - for month-over-month comparison
 6. get_transactions_by_bank - for per-bank breakdown
+7. query_transactions - for detailed transaction data when needed
+
+## Report Format
 
 Format your report in clean markdown with:
 - A clear title with the month/year
 - Executive summary with key numbers
+- Property-related expenses (mortgage interest, etc.) broken down by property if applicable
 - Spending breakdown by category (table format)
 - Top merchants/expenses (table format)
-- Activity by bank/account (table format)
+- Activity by bank/account (use account labels from context, not raw IDs)
 - Month-over-month comparison
 - Key observations and recommendations
 
