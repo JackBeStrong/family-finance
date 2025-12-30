@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import traceback
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
@@ -34,12 +35,15 @@ from mcp.types import Tool, TextContent
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.database.postgres_repository import PostgresRepository
 
-# Configure logging
+# Configure logging with DEBUG level for development
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Also set MCP SDK logging to DEBUG
+logging.getLogger("mcp").setLevel(logging.DEBUG)
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -79,7 +83,14 @@ class FamilyFinanceMCP:
     def _get_db(self) -> PostgresRepository:
         """Get or create database connection."""
         if self.db is None:
-            self.db = PostgresRepository()
+            logger.info("Creating new database connection...")
+            try:
+                self.db = PostgresRepository()
+                logger.info("Database connection established successfully")
+            except Exception as e:
+                error_trace = traceback.format_exc()
+                logger.error(f"Failed to connect to database:\n{error_trace}")
+                raise
         return self.db
     
     def _setup_tools(self):
@@ -261,12 +272,16 @@ class FamilyFinanceMCP:
         
         @self.server.call_tool()
         async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+            logger.info(f"Tool called: {name} with args: {arguments}")
             try:
                 result = await self._execute_tool(name, arguments)
+                logger.info(f"Tool {name} completed successfully")
+                logger.debug(f"Tool {name} result: {result}")
                 return [TextContent(type="text", text=json_dumps(result))]
             except Exception as e:
-                logger.error(f"Tool {name} failed: {e}")
-                return [TextContent(type="text", text=json_dumps({"error": str(e)}))]
+                error_trace = traceback.format_exc()
+                logger.error(f"Tool {name} failed with exception:\n{error_trace}")
+                return [TextContent(type="text", text=json_dumps({"error": str(e), "traceback": error_trace}))]
     
     async def _execute_tool(self, name: str, args: dict) -> Any:
         """Execute a tool and return the result."""
@@ -618,34 +633,66 @@ class FamilyFinanceMCP:
     async def run_sse(self, host: str = "0.0.0.0", port: int = 8080):
         """Run the server with SSE transport (for remote access)."""
         from starlette.applications import Starlette
-        from starlette.routing import Route, Mount
-        from starlette.responses import JSONResponse
+        from starlette.routing import Route
+        from starlette.responses import JSONResponse, Response
+        from starlette.middleware import Middleware
+        from starlette.middleware.errors import ServerErrorMiddleware
         import uvicorn
         
         sse_transport = SseServerTransport("/messages/")
         
         async def handle_sse(request):
-            async with sse_transport.connect_sse(
-                request.scope, request.receive, request._send
-            ) as streams:
-                await self.server.run(
-                    streams[0], streams[1], self.server.create_initialization_options()
-                )
+            client_ip = request.client.host if request.client else "unknown"
+            logger.info(f"SSE connection from {client_ip}")
+            try:
+                async with sse_transport.connect_sse(
+                    request.scope, request.receive, request._send
+                ) as streams:
+                    logger.debug(f"SSE streams established for {client_ip}")
+                    await self.server.run(
+                        streams[0], streams[1], self.server.create_initialization_options()
+                    )
+                logger.info(f"SSE connection closed for {client_ip}")
+            except Exception as e:
+                error_trace = traceback.format_exc()
+                logger.error(f"SSE handler error for {client_ip}:\n{error_trace}")
+                raise
+        
+        async def handle_messages(request):
+            """Handle POST messages - delegate to SSE transport."""
+            client_ip = request.client.host if request.client else "unknown"
+            session_id = request.query_params.get("session_id", "unknown")
+            logger.debug(f"POST /messages/ from {client_ip}, session={session_id}")
+            try:
+                await sse_transport.handle_post_message(request.scope, request.receive, request._send)
+                logger.debug(f"POST /messages/ completed for session={session_id}")
+                # Return empty response - the transport already sent the response
+                return Response(status_code=202)
+            except Exception as e:
+                error_trace = traceback.format_exc()
+                logger.error(f"Message handler error for session={session_id}:\n{error_trace}")
+                raise
         
         async def health_check(request):
             return JSONResponse({"status": "healthy", "service": "family-finance-mcp"})
         
+        # Add error handling middleware
         app = Starlette(
             routes=[
                 Route("/sse", handle_sse),
-                # Mount the SSE transport's message handler directly as an ASGI app
-                Mount("/messages", app=sse_transport.handle_post_message),
+                Route("/messages/", handle_messages, methods=["POST"]),
                 Route("/health", health_check),
+            ],
+            middleware=[
+                Middleware(ServerErrorMiddleware, debug=True)
             ]
         )
         
         logger.info(f"Starting MCP server on http://{host}:{port}")
-        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        logger.info(f"SSE endpoint: http://{host}:{port}/sse")
+        logger.info(f"Messages endpoint: http://{host}:{port}/messages/")
+        logger.info(f"Health endpoint: http://{host}:{port}/health")
+        config = uvicorn.Config(app, host=host, port=port, log_level="debug")
         server = uvicorn.Server(config)
         await server.serve()
     
