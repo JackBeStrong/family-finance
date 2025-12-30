@@ -122,33 +122,29 @@ Use these tools:
 - Notable income/expense changes
 - Any unusual transactions or patterns
 
-### 4. 💳 Credit Card Spending Detail (MOST IMPORTANT - BE THOROUGH)
-Use `query_transactions` with the credit card account_id to get ALL credit card transactions.
+### 4. 💳 Credit Card Spending Detail
+Use `query_transactions` with the credit card account_id to get credit card transactions.
 
 **Credit Card Summary:**
 - Total Spend: $X
 - Number of Transactions: X
 - Average Transaction: $X
-- Largest Transaction: $X (description)
 
-**All Transactions:**
-| Date | Description | Amount | Category |
-|------|-------------|--------|----------|
-(List ALL transactions - do not truncate)
+**Top 5 Largest Transactions:**
+| Date | Description | Amount |
+|------|-------------|--------|
+(Show only the 5 biggest purchases)
 
-**Spending Analysis:**
-Group and analyze the transactions:
-- 🍽️ Dining/Restaurants: $X (X transactions) - list major ones
+**Spending by Category:**
+- 🍽️ Dining/Restaurants: $X (X transactions)
 - 🛒 Groceries: $X (X transactions)
-- 🛍️ Shopping: $X (X transactions) - list major purchases
-- 🔄 Subscriptions: $X (list each subscription)
+- 🛍️ Shopping: $X (X transactions)
+- 🔄 Subscriptions: $X (list each one)
 - ⛽ Transport/Fuel: $X (X transactions)
 - 🎬 Entertainment: $X (X transactions)
 - 💡 Utilities: $X (X transactions)
 - 🏥 Healthcare: $X (X transactions)
 - Other: $X
-
-Highlight any unusual or large purchases.
 
 ### 5. 📈 Investment Portfolio (REQUIRED)
 **Total Portfolio Value:** $X USD (~$X AUD at 1.51 rate)
@@ -183,7 +179,6 @@ You are generating the SECOND HALF of a comprehensive financial report. Focus on
 - Spending by Category (all accounts)
 - Top Merchants
 - Bank Account Activity
-- Month-over-Month Comparison
 - Analysis and Recommendations
 
 ## Step 1: Understand the Financial Context
@@ -193,49 +188,28 @@ Call `get_financial_context` first to understand account labels and purposes.
 ## Step 2: Gather Data
 
 Use these tools:
-1. get_spending_by_category - for ALL spending patterns
-2. get_top_merchants - for top 10 merchants
+1. get_spending_by_category - for spending patterns
+2. get_top_merchants - for top 5 merchants only
 3. get_transactions_by_bank - for per-bank breakdown
-4. get_month_comparison - for month-over-month comparison
 
 ## Report Format for PART 2 (FOLLOW EXACTLY)
 
 ### 6. 💰 Spending Breakdown by Category (All Accounts)
-| Category | Amount | % of Total | Transactions |
-|----------|--------|------------|--------------|
-| XXX | $X | X% | X |
+| Category | Amount | % of Total |
+|----------|--------|------------|
+| XXX | $X | X% |
 
-### 7. 📊 Category Insights
-- 2-3 bullet points analyzing the spending patterns
-- Note any unusual categories or amounts
+### 7. 🏪 Top 5 Merchants
+| Merchant/Description | Amount |
+|---------------------|--------|
+| XXX | $X |
 
-### 8. 🏪 Top 10 Merchants/Transactions
-| Merchant/Description | Amount | Count |
-|---------------------|--------|-------|
-| XXX | $X | X |
+### 8. 🏦 Activity by Bank & Account
+| Bank | Account | Net | Trans. |
+|------|---------|-----|--------|
+| XXX | XXX (Type) | +/-$X | X |
 
-**Top 10 Total:** $X (X% of all expenses)
-
-### 9. 🏦 Activity by Bank & Account
-| Bank | Account | Income | Expenses | Net | Trans. |
-|------|---------|--------|----------|-----|--------|
-| XXX | XXX (Type) | $X | $X | +/-$X | X |
-
-### 10. 💡 Banking Insights
-- 2-3 bullet points about account activity patterns
-
-### 11. 📈 Month-over-Month Comparison
-| Metric | [Previous Month] | [Current Month] | Change | % Change |
-|--------|-----------------|-----------------|--------|----------|
-| Income | $X | $X | +/-$X | +/-X% |
-| Expenses | $X | $X | +/-$X | +/-X% |
-| Net | $X | $X | +/-$X | +/-X% |
-| Transactions | X | X | +/-X | +/-X% |
-
-### 12. 🔍 Analysis
-A paragraph explaining the key trends and what the numbers mean in context.
-
-### 13. 💭 Key Observations & Recommendations
+### 9. 💭 Key Observations & Recommendations
 
 **⚠️ Concerns**
 - 2-3 bullet points about potential issues
@@ -246,7 +220,7 @@ A paragraph explaining the key trends and what the numbers mean in context.
 **📋 Recommendations**
 - 3-5 actionable recommendations based on the data
 
-### 14. Footer
+### 10. Footer
 ```
 ---
 **Report Generated:** [Month Year] Data | [X] Transactions Analyzed
@@ -254,12 +228,9 @@ A paragraph explaining the key trends and what the numbers mean in context.
 
 ## Important Guidelines
 - Use emojis for section headers as shown above
-- Include transaction counts wherever possible
-- Show percentages for context
+- Be concise - avoid verbose explanations
 - Use meaningful account labels from financial context (not raw IDs)
-- Calculate and show "Top X Total" as percentage of all expenses
 - Provide specific, actionable insights
-- Use tables for all data presentation
 """
 
 def setup_ibkr_environment():
@@ -396,32 +367,30 @@ async def generate_report() -> str:
     user_prompt_part1 = f"""Generate PART 1 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
-1. Title and Executive Summary
-2. Key Highlights
-3. Credit Card Spending Detail (ALL transactions - this is the most important section)
-4. Investment Portfolio
+1. Title and Executive Summary (with summary table)
+2. Key Highlights (3-5 bullet points)
+3. Credit Card Spending (summary + top 5 transactions + spending by category)
+4. Investment Portfolio (holdings, dividends, trades)
 
-Use get_monthly_summary with year={year} and month={month_num} to get totals.
-Use query_transactions with the credit card account_id to get ALL credit card transactions.
-Use get_flex_query to get investment portfolio data.
+Use get_monthly_summary with year={year} and month={month_num}.
+Use query_transactions with the credit card account_id.
+Use get_flex_query for investment portfolio data.
 
-Be thorough with the credit card section - list every transaction."""
+Keep it concise - only top 5 credit card transactions, not all."""
 
     # User prompt for Part 2
     user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
 6. Spending Breakdown by Category (all accounts)
-7. Category Insights
-8. Top 10 Merchants
-9. Activity by Bank & Account
-10. Banking Insights
-11. Month-over-Month Comparison (vs {prev_month_name})
-12. Analysis
-13. Key Observations & Recommendations
-14. Footer
+7. Top 5 Merchants
+8. Activity by Bank & Account
+9. Key Observations & Recommendations
+10. Footer
 
-Use get_spending_by_category, get_top_merchants, get_transactions_by_bank, and get_month_comparison with year={year} and month={month_num}."""
+Use get_spending_by_category, get_top_merchants (top_n=5), and get_transactions_by_bank with year={year} and month={month_num}.
+
+Keep it concise - no month-over-month comparison needed."""
 
     # Generate Part 1
     logger.info("=" * 40)
