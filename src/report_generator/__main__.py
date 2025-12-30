@@ -6,7 +6,9 @@ Generates an AI-powered financial report using MCP tools and sends it via email.
 Uses mcp-agent library for agentic AI with MCP tool support.
 
 Usage:
-    python -m src.report_generator
+    python -m src.report_generator                    # Default: last month
+    python -m src.report_generator --month 11 --year 2025  # Specific month
+    python -m src.report_generator --start 2025-11-01 --end 2025-11-30  # Date range
 
 Environment Variables:
     ANTHROPIC_API_KEY: Anthropic API key
@@ -23,8 +25,10 @@ import sys
 import re
 import asyncio
 import logging
+import argparse
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
@@ -357,26 +361,51 @@ async def generate_report_part(system_prompt: str, user_prompt: str, part_name: 
             return report_part
 
 
-async def generate_report() -> str:
+async def generate_report(start_date: datetime = None, end_date: datetime = None) -> str:
     """
     Generate a comprehensive financial report in two parts to avoid token limits.
     
     Part 1: Executive Summary, Credit Card Details, Investment Portfolio
     Part 2: Spending Categories, Merchants, Bank Activity, Recommendations
     
+    Args:
+        start_date: Start date for the report period (default: first day of last month)
+        end_date: End date for the report period (default: last day of last month)
+    
     Returns:
         The combined report as markdown string.
     """
-    # Calculate target month
+    # Calculate target period
     today = datetime.now()
-    last_month = today - relativedelta(months=1)
-    month_name = last_month.strftime("%B")
-    year = last_month.year
-    month_num = last_month.month
-    prev_month_name = (last_month - relativedelta(months=1)).strftime('%B %Y')
     
-    # User prompt for Part 1
-    user_prompt_part1 = f"""Generate PART 1 of the monthly financial report for {month_name} {year} (month {month_num}).
+    if start_date is None or end_date is None:
+        # Default: last month
+        last_month = today - relativedelta(months=1)
+        start_date = last_month.replace(day=1)
+        _, last_day = monthrange(last_month.year, last_month.month)
+        end_date = last_month.replace(day=last_day)
+    
+    # Format dates for display and queries
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d")
+    
+    # Determine if this is a single month or a date range
+    is_single_month = (start_date.year == end_date.year and
+                       start_date.month == end_date.month and
+                       start_date.day == 1 and
+                       end_date.day == monthrange(end_date.year, end_date.month)[1])
+    
+    if is_single_month:
+        # Single month - use month-based queries
+        month_name = start_date.strftime("%B")
+        year = start_date.year
+        month_num = start_date.month
+        period_label = f"{month_name} {year}"
+        period_detail = f"{month_name} 1-{end_date.day}, {year}"
+        prev_month_name = (start_date - relativedelta(months=1)).strftime('%B %Y')
+        
+        # User prompt for Part 1 (single month)
+        user_prompt_part1 = f"""Generate PART 1 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
 1. Title and Executive Summary (with summary table)
@@ -385,13 +414,13 @@ This part should include:
 4. Investment Portfolio (holdings, dividends, trades)
 
 Use get_monthly_summary with year={year} and month={month_num}.
-Use query_transactions with the credit card account_id.
+Use query_transactions with the credit card account_id and start_date="{start_str}" and end_date="{end_str}".
 Use get_flex_query for investment portfolio data.
 
 Keep it concise - only top 5 credit card transactions, not all."""
 
-    # User prompt for Part 2
-    user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
+        # User prompt for Part 2 (single month)
+        user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
 5. Spending Breakdown by Category (all accounts)
@@ -400,6 +429,40 @@ This part should include:
 8. Footer
 
 Use get_spending_by_category and get_top_merchants (top_n=5) with year={year} and month={month_num}.
+
+Keep it concise - no month-over-month comparison needed."""
+    else:
+        # Date range - use date-based queries
+        period_label = f"{start_str} to {end_str}"
+        period_detail = f"{start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}"
+        
+        # User prompt for Part 1 (date range)
+        user_prompt_part1 = f"""Generate PART 1 of the financial report for the period {period_label}.
+
+This part should include:
+1. Title and Executive Summary (with summary table)
+2. Key Highlights (3-5 bullet points)
+3. Credit Card Spending (summary + top 5 transactions + spending by category)
+4. Investment Portfolio (holdings, dividends, trades)
+
+Use query_transactions with start_date="{start_str}" and end_date="{end_str}" to get all transactions.
+Use query_transactions with the credit card account_id and start_date="{start_str}" and end_date="{end_str}" for credit card transactions.
+Use get_flex_query for investment portfolio data.
+
+For the summary, calculate totals from the transaction data.
+Keep it concise - only top 5 credit card transactions, not all."""
+
+        # User prompt for Part 2 (date range)
+        user_prompt_part2 = f"""Generate PART 2 of the financial report for the period {period_label}.
+
+This part should include:
+5. Spending Breakdown by Category (all accounts)
+6. Top 5 Merchants
+7. Key Observations & Recommendations
+8. Footer
+
+Use query_transactions with start_date="{start_str}" and end_date="{end_str}" to get all transactions.
+Then calculate category breakdown and top merchants from the transaction data.
 
 Keep it concise - no month-over-month comparison needed."""
 
@@ -428,17 +491,140 @@ Keep it concise - no month-over-month comparison needed."""
     return combined_report
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Generate AI-powered financial reports",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m src.report_generator                           # Default: last month
+  python -m src.report_generator --month 11 --year 2025    # Specific month
+  python -m src.report_generator --start 2025-11-01 --end 2025-11-30  # Date range
+  python -m src.report_generator --start 2025-10-01 --end 2025-11-30  # Multi-month range
+        """
+    )
+    
+    # Month/year options (for single month reports)
+    parser.add_argument(
+        "--month", "-m",
+        type=int,
+        choices=range(1, 13),
+        metavar="MONTH",
+        help="Month number (1-12) for single month report"
+    )
+    parser.add_argument(
+        "--year", "-y",
+        type=int,
+        metavar="YEAR",
+        help="Year (e.g., 2025) for single month report"
+    )
+    
+    # Date range options (for custom date ranges)
+    parser.add_argument(
+        "--start", "-s",
+        type=str,
+        metavar="DATE",
+        help="Start date in YYYY-MM-DD format"
+    )
+    parser.add_argument(
+        "--end", "-e",
+        type=str,
+        metavar="DATE",
+        help="End date in YYYY-MM-DD format"
+    )
+    
+    # Optional: skip email (for testing)
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="Generate report but don't send email (print to stdout instead)"
+    )
+    
+    return parser.parse_args()
+
+
+def get_date_range(args) -> tuple[datetime, datetime]:
+    """
+    Determine the date range from command-line arguments.
+    
+    Args:
+        args: Parsed command-line arguments
+        
+    Returns:
+        Tuple of (start_date, end_date) as datetime objects
+        
+    Raises:
+        ValueError: If arguments are invalid or conflicting
+    """
+    # Check for conflicting options
+    has_month_year = args.month is not None or args.year is not None
+    has_date_range = args.start is not None or args.end is not None
+    
+    if has_month_year and has_date_range:
+        raise ValueError("Cannot use --month/--year with --start/--end. Choose one method.")
+    
+    if has_month_year:
+        # Month/year mode
+        if args.month is None or args.year is None:
+            raise ValueError("Both --month and --year are required when using month mode")
+        
+        start_date = datetime(args.year, args.month, 1)
+        _, last_day = monthrange(args.year, args.month)
+        end_date = datetime(args.year, args.month, last_day)
+        
+        logger.info(f"Using month mode: {start_date.strftime('%B %Y')}")
+        return start_date, end_date
+    
+    elif has_date_range:
+        # Date range mode
+        if args.start is None or args.end is None:
+            raise ValueError("Both --start and --end are required when using date range mode")
+        
+        try:
+            start_date = datetime.strptime(args.start, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"Invalid start date format: {args.start}. Use YYYY-MM-DD")
+        
+        try:
+            end_date = datetime.strptime(args.end, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"Invalid end date format: {args.end}. Use YYYY-MM-DD")
+        
+        if start_date > end_date:
+            raise ValueError(f"Start date ({args.start}) must be before end date ({args.end})")
+        
+        logger.info(f"Using date range mode: {args.start} to {args.end}")
+        return start_date, end_date
+    
+    else:
+        # Default: last month
+        logger.info("Using default mode: last month")
+        return None, None  # generate_report() will handle the default
+
+
 def main():
     """Main entry point for the report generator."""
+    # Parse command-line arguments
+    args = parse_args()
+    
     logger.info("=" * 50)
     logger.info("Family Finance Report Generator")
     logger.info(f"Started at: {datetime.now().isoformat()}")
     logger.info("=" * 50)
     
     try:
+        # Determine date range from arguments
+        start_date, end_date = get_date_range(args)
+        
+        if start_date and end_date:
+            logger.info(f"Report period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        else:
+            logger.info("Report period: Last month (default)")
+        
         # Step 1: Generate report using AI agent with MCP tools
         logger.info("Step 1: Generating report with AI agent...")
-        raw_report = asyncio.run(generate_report())
+        raw_report = asyncio.run(generate_report(start_date, end_date))
         logger.info(f"Raw report generated ({len(raw_report)} chars)")
         
         # Step 2: Clean up the report (remove tool-calling artifacts)
@@ -446,9 +632,28 @@ def main():
         report_content = clean_report(raw_report)
         logger.info(f"Cleaned report ({len(report_content)} chars)")
         
-        # Step 3: Send email
+        # Step 3: Send email (or print to stdout if --no-email)
+        if args.no_email:
+            logger.info("Step 3: Printing report to stdout (--no-email specified)")
+            print("\n" + "=" * 60)
+            print(report_content)
+            print("=" * 60 + "\n")
+            sys.exit(0)
+        
         logger.info("Step 3: Sending email...")
-        subject = f"Family Finance Report - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        
+        # Build subject line with date range info
+        if start_date and end_date:
+            if start_date.year == end_date.year and start_date.month == end_date.month:
+                period_str = start_date.strftime('%B %Y')
+            else:
+                period_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        else:
+            # Default: last month
+            last_month = datetime.now() - relativedelta(months=1)
+            period_str = last_month.strftime('%B %Y')
+        
+        subject = f"Family Finance Report - {period_str}"
         
         success = send_report_email(
             subject=subject,
@@ -463,6 +668,9 @@ def main():
             logger.error("Failed to send report email")
             sys.exit(1)
             
+    except ValueError as e:
+        logger.error(f"Invalid arguments: {e}")
+        sys.exit(2)
     except Exception as e:
         logger.exception(f"Report generation failed: {e}")
         sys.exit(1)
