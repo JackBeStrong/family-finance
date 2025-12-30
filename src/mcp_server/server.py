@@ -618,7 +618,7 @@ class FamilyFinanceMCP:
     async def run_sse(self, host: str = "0.0.0.0", port: int = 8080):
         """Run the server with SSE transport (for remote access)."""
         from starlette.applications import Starlette
-        from starlette.routing import Route
+        from starlette.routing import Route, Mount
         from starlette.responses import JSONResponse
         import uvicorn
         
@@ -632,16 +632,14 @@ class FamilyFinanceMCP:
                     streams[0], streams[1], self.server.create_initialization_options()
                 )
         
-        async def handle_messages(request):
-            return await sse_transport.handle_post_message(request.scope, request.receive, request._send)
-        
         async def health_check(request):
             return JSONResponse({"status": "healthy", "service": "family-finance-mcp"})
         
         app = Starlette(
             routes=[
                 Route("/sse", handle_sse),
-                Route("/messages/", handle_messages, methods=["POST"]),
+                # Mount the SSE transport's message handler directly as an ASGI app
+                Mount("/messages", app=sse_transport.handle_post_message),
                 Route("/health", health_check),
             ]
         )
