@@ -1,1 +1,35 @@
-{"mcpServers":{"family-finance":{"url":"http://192.168.1.237:8080/sse","disabled":false,"alwaysAllow":["get_monthly_summary","get_spending_by_category","get_top_merchants","get_month_comparison","get_available_months","get_transactions_by_bank","query_transactions"],"disabledTools":[]}}}
+{
+  "mcpServers": {
+    "family-finance": {
+      "url": "http://192.168.1.237:8080/sse",
+      "disabled": false,
+      "alwaysAllow": [
+        "get_monthly_summary",
+        "get_spending_by_category",
+        "get_top_merchants",
+        "get_month_comparison",
+        "get_available_months",
+        "get_transactions_by_bank",
+        "query_transactions"
+      ],
+      "disabledTools": []
+    },
+    "interactive-brokers": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "interactive-brokers-mcp"
+      ],
+      "disabled": false,
+      "env": {
+        "IB_FLEX_TOKEN": "127422449153966077983063"
+      },
+      "alwaysAllow": [
+        "list_flex_queries"
+      ],
+      "disabledTools": [
+        "place_order"
+      ]
+    }
+  }
+}

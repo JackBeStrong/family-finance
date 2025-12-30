@@ -8,6 +8,13 @@ mcp:
     family-finance:
       transport: sse
       url: "http://192.168.1.237:8080/sse"
+    
+    interactive-brokers:
+      transport: stdio
+      command: npx
+      args: ["-y", "interactive-brokers-mcp"]
+      env:
+        IB_FLEX_TOKEN: "${IBKR_FLEX_TOKEN}"
 
 anthropic:
   default_model: claude-sonnet-4-5
