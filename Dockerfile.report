@@ -6,7 +6,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements-report.txt requirements.txt
+# Note: requirements-report.txt is renamed to requirements.txt by Ansible before build
+COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and config
