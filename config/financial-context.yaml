@@ -5,11 +5,11 @@
 # The AI uses this to understand your financial structure and generate
 # meaningful, personalized reports.
 #
-# Version: 1.0
+# Version: 1.1
 # Last Updated: 2025-12-30
 # =============================================================================
 
-version: "1.0"
+version: "1.1"
 
 # -----------------------------------------------------------------------------
 # HOUSEHOLD MEMBERS
@@ -154,22 +154,78 @@ accounts:
 # -----------------------------------------------------------------------------
 # Define properties for mortgage and rental income tracking.
 # All properties are investment properties.
+# Updated November 2025 after refinance.
 
 properties:
   - id: property_1
-    address: "4 Mann Pl"
+    address: "4 Mann Pl, St Helens Park NSW 2560"
     type: investment
-    notes: "Investment property - rental income"
+    ownership:
+      - person_id: primary
+        percentage: 100
+    valuation:
+      amount: 800000
+      date: "2025-11-08"
+    mortgage:
+      current_loan: 650000
+      previous_loan: 554294.50
+      lvr: 81.25
+      interest_rate: 5.37
+      lender: "Westpac (Rocket Investment Rate)"
+    notes: "Investment property - rental income. Refinanced November 2025."
     
   - id: property_2
-    address: "16 Austin Ave"
+    address: "16 Austin Ave, Campbelltown NSW 2560"
     type: investment
-    notes: "Investment property - rental income"
+    ownership:
+      - person_id: primary
+        percentage: 50
+      - person_id: spouse
+        percentage: 50
+    valuation:
+      amount: 1100000
+      date: "2025-11-08"
+    mortgage:
+      current_loan: 790000
+      previous_loan: 669221.67
+      lvr: 71.82
+      interest_rate: 5.37
+      lender: "Westpac (Rocket Investment Rate)"
+    notes: "Investment property - rental income. Refinanced November 2025."
     
   - id: property_3
-    address: "24 Hindmarsh Ct"
+    address: "24 Hindmarsh Ct, Robina QLD 4226"
     type: investment
-    notes: "Investment property - rental income"
+    ownership:
+      - person_id: primary
+        percentage: 80
+      - person_id: spouse
+        percentage: 20
+    valuation:
+      amount: 1500000
+      date: "2025-11-08"
+    mortgage:
+      current_loan: 1050000
+      previous_loan: 876777.10
+      lvr: 70.00
+      interest_rate: 5.37
+      lender: "Westpac (Rocket Investment Rate)"
+    notes: "Investment property - rental income. Refinanced November 2025."
+
+# -----------------------------------------------------------------------------
+# PORTFOLIO SUMMARY (Post-Refinance November 2025)
+# -----------------------------------------------------------------------------
+portfolio_summary:
+  total_property_value: 3400000
+  total_loans: 2490000
+  total_equity: 910000
+  overall_lvr: 73.24
+  equity_percentage: 26.76
+  refinance_date: "2025-11-08"
+  notes: |
+    All 3 properties refinanced in November 2025 with Westpac.
+    Interest rate: 5.37% p.a. (Rocket Investment Rate with 3.26% discount).
+    Total equity released: $389,706.73 for investment purposes.
 
 # -----------------------------------------------------------------------------
 # KNOWN ENTITIES
