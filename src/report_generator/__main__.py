@@ -101,28 +101,29 @@ Use these tools:
 
 ## Report Format for PART 1 (FOLLOW EXACTLY)
 
-### 1. Title and Header
-```
+**CRITICAL: Each section MUST include the section number (1, 2, 3, 4) in the heading. Do NOT omit the numbers.**
+
+Output this EXACTLY (with section numbers):
+
+## 1. Executive Summary
+
 # Monthly Financial Report: [Month Year]
-## Executive Summary
 
 **Period:** [Month] 1-[last day], [Year] | **Transactions:** [count]
-```
 
-### 2. Summary Table
 | Metric | Amount | Change vs [Previous Month] |
 |--------|--------|---------------------------|
 | Total Income | $X | ⬆️/⬇️ X% (+/-$X) |
 | Total Expenses | $X | ⬆️/⬇️ X% (+/-$X) |
 | Net Position | $X | ⬆️/⬇️ $X |
 
-### 3. 🚨 Key Highlights (3-5 bullet points)
+## 2. 🚨 Key Highlights
 - Investment portfolio value and performance
 - Credit card spending summary
 - Notable income/expense changes
 - Any unusual transactions or patterns
 
-### 4. 💳 Credit Card Spending Detail
+## 3. 💳 Credit Card Spending Detail
 Use `query_transactions` with the credit card account_id to get credit card transactions.
 
 **Credit Card Summary:**
@@ -157,7 +158,7 @@ Use `query_transactions` with the credit card account_id to get credit card tran
 | 🏥 Healthcare | $X | X |
 | Other | $X | X |
 
-### 5. 📈 Investment Portfolio (REQUIRED)
+## 4. 📈 Investment Portfolio (REQUIRED)
 **Total Portfolio Value:** $X USD (~$X AUD at 1.51 rate)
 
 | Symbol | Shares | Market Value (USD) | Cost Basis (USD) | Unrealized P&L (USD) |
@@ -181,13 +182,12 @@ Use `query_transactions` with the credit card account_id to get credit card tran
 END OF PART 1 - Part 2 will continue with spending categories, merchants, and recommendations.
 """
 
-# System prompt for PART 2: Categories, Merchants, Bank Activity, Recommendations
+# System prompt for PART 2: Merchants, Bank Activity, Recommendations
 SYSTEM_PROMPT_PART2 = f"""{BASE_SYSTEM_PROMPT}
 
 ## Your Task: Generate PART 2 of the Monthly Financial Report
 
 You are generating the SECOND HALF of a comprehensive financial report. Focus on:
-- Spending by Category (all accounts)
 - Top Merchants
 - Bank Account Activity
 - Analysis and Recommendations
@@ -199,28 +199,24 @@ Call `get_financial_context` first to understand account labels and purposes.
 ## Step 2: Gather Data
 
 Use these tools:
-1. get_spending_by_category - for spending patterns
-2. get_top_merchants - for top 5 merchants only
-3. get_transactions_by_bank - for per-bank breakdown
+1. get_top_merchants - for top 5 merchants only
+2. get_transactions_by_bank - for per-bank breakdown
 
 ## Report Format for PART 2 (FOLLOW EXACTLY)
 
-### 6. 💰 Spending Breakdown by Category (All Accounts)
-| Category | Amount | % of Total |
-|----------|--------|------------|
-| XXX | $X | X% |
+**CRITICAL: Each section MUST include the section number (5, 6, 7, 8) in the heading. Do NOT omit the numbers.**
 
-### 7. 🏪 Top 5 Merchants
+## 5. 🏪 Top 5 Merchants
 | Merchant/Description | Amount |
 |---------------------|--------|
 | XXX | $X |
 
-### 8. 🏦 Activity by Bank & Account
+## 6. 🏦 Activity by Bank & Account
 | Bank | Account | Net | Trans. |
 |------|---------|-----|--------|
 | XXX | XXX (Type) | +/-$X | X |
 
-### 9. 💭 Key Observations & Recommendations
+## 7. 💭 Key Observations & Recommendations
 
 **⚠️ Concerns**
 - 2-3 bullet points about potential issues
@@ -231,7 +227,7 @@ Use these tools:
 **📋 Recommendations**
 - 3-5 actionable recommendations based on the data
 
-### 10. Footer
+## 8. Footer
 ```
 ---
 **Report Generated:** [Month Year] Data | [X] Transactions Analyzed
@@ -398,13 +394,12 @@ Keep it concise - only top 5 credit card transactions, not all."""
     user_prompt_part2 = f"""Generate PART 2 of the monthly financial report for {month_name} {year} (month {month_num}).
 
 This part should include:
-6. Spending Breakdown by Category (all accounts)
-7. Top 5 Merchants
-8. Activity by Bank & Account
-9. Key Observations & Recommendations
-10. Footer
+5. Top 5 Merchants
+6. Activity by Bank & Account
+7. Key Observations & Recommendations
+8. Footer
 
-Use get_spending_by_category, get_top_merchants (top_n=5), and get_transactions_by_bank with year={year} and month={month_num}.
+Use get_top_merchants (top_n=5) and get_transactions_by_bank with year={year} and month={month_num}.
 
 Keep it concise - no month-over-month comparison needed."""
 
