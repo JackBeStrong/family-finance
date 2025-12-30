@@ -139,6 +139,11 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-31 09:09:00 AEDT] - Removed "Activity by Bank & Account" section from report (kept Spending by Category and Top Merchants)
 * [2025-12-31 09:09:00 AEDT] - **Cron Timing Changed**: Report now runs on last day of each month at 11pm (was 1st at 8am)
 * [2025-12-31 09:09:00 AEDT] - Cron handles leap years (Feb 28 for non-leap, Feb 29 for leap years)
+* [2025-12-31 09:52:00 AEDT] - **Date Range Support Added**: Report generator now accepts command-line arguments for custom date ranges
+* [2025-12-31 09:52:00 AEDT] - Added `--month`/`--year` for specific month reports, `--start`/`--end` for date ranges
+* [2025-12-31 09:52:00 AEDT] - Added `--no-email` flag for testing (prints to stdout instead of emailing)
+* [2025-12-31 09:52:00 AEDT] - Changed Dockerfile.report from CMD to ENTRYPOINT to allow argument passing
+* [2025-12-31 09:52:00 AEDT] - Updated Ansible playbook to pass `$@` arguments to Docker container
 
 ## Key Files
 

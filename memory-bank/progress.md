@@ -134,10 +134,29 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 - **Monthly cron**: Last day of each month at 11pm AEDT (handles leap years)
 - **Logs**: `/var/log/finance-report/cron.log`
 
+### Report Generator Command-Line Options (NEW - 2025-12-31)
+```bash
+# Default: last month
+generate-finance-report.sh
+
+# Specific month
+generate-finance-report.sh --month 12 --year 2025
+
+# Custom date range
+generate-finance-report.sh --start 2025-11-01 --end 2025-11-30
+
+# Multi-month range
+generate-finance-report.sh --start 2025-10-01 --end 2025-11-30
+
+# Print to stdout (no email)
+generate-finance-report.sh --no-email
+```
+
 ### Future Enhancements
 * [x] Refine report prompt for more detailed analysis → Done via Financial Context Store
 * [x] Report on last month (not current) for complete data → Done 2025-12-30
 * [x] Support multiple email recipients → Done 2025-12-30 (ready for future use)
+* [x] Custom date range support → Done 2025-12-31 (--month/--year, --start/--end)
 * [ ] Add trend visualization charts
 * [ ] Add budget tracking and alerts
 

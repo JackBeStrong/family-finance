@@ -4,6 +4,65 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2025-12-31 09:52:00 AEDT] - Date Range Support for Report Generator
+
+### Decision
+Added command-line argument support to the report generator for custom date ranges, while maintaining backward compatibility with the default "last month" behavior.
+
+### Context
+- Report generator previously only supported generating reports for the previous month
+- User needed ability to generate reports for specific months or custom date ranges
+- Cron job should continue to work without changes (default behavior)
+
+### Rationale
+- **argparse over environment variables**: CLI args are more intuitive for on-demand usage
+- **Two modes**: Month/year mode (`--month 12 --year 2025`) for single months, date range mode (`--start`/`--end`) for custom periods
+- **ENTRYPOINT over CMD**: Docker needs ENTRYPOINT to append arguments rather than replace the command
+- **Backward compatible**: No arguments = last month (existing behavior preserved)
+
+### Implementation
+
+1. **Python Script Changes** (`src/report_generator/__main__.py`):
+   - Added `parse_args()` function using `argparse`
+   - Added `get_date_range()` function to validate and process arguments
+   - Modified `generate_report()` to accept `start_date` and `end_date` parameters
+   - Single-month reports use optimized month-based MCP queries
+   - Date range reports use flexible `query_transactions` with date filters
+   - Added `--no-email` flag for testing (prints to stdout)
+
+2. **Dockerfile Changes** (`Dockerfile.report`):
+   - Changed `CMD` to `ENTRYPOINT` so arguments are appended, not replaced
+   - `ENTRYPOINT ["python", "-m", "src.report_generator"]`
+
+3. **Ansible Playbook Changes** (`family-finance.yml`):
+   - Updated shell script to pass `"$@"` to Docker container
+   - Added usage documentation in script header
+
+### Command-Line Options
+```
+--month, -m MONTH     Month number (1-12) for single month report
+--year, -y YEAR       Year (e.g., 2025) for single month report
+--start, -s DATE      Start date in YYYY-MM-DD format
+--end, -e DATE        End date in YYYY-MM-DD format
+--no-email            Generate report but don't send email (print to stdout)
+```
+
+### Usage Examples
+```bash
+generate-finance-report.sh                           # Default: last month
+generate-finance-report.sh --month 12 --year 2025    # December 2025
+generate-finance-report.sh --start 2025-11-01 --end 2025-11-30  # Date range
+generate-finance-report.sh --no-email                # Print to stdout
+```
+
+### Implications
+- Cron job continues to work unchanged (uses default behavior)
+- Users can generate historical reports on-demand
+- Multi-month reports possible with date range mode
+- Testing easier with `--no-email` flag
+
+---
+
 ## [2025-12-30 23:47:00 AEDT] - Interactive Brokers Integration via Flex Queries
 
 ### Decision
