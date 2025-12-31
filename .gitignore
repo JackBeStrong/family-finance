@@ -62,5 +62,5 @@ logs/
 .roo/
 
 # data
-.data/
-.incoming/
+data/
+incoming/
