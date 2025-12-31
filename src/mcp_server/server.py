@@ -207,7 +207,7 @@ class FamilyFinanceMCP:
                 ),
                 Tool(
                     name="get_top_merchants",
-                    description="Get top merchants/payees by total spending for a month.",
+                    description="Get top merchants/payees by total spending for a month. By default excludes internal transfers (mortgage payments, transfers between own accounts).",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -222,6 +222,10 @@ class FamilyFinanceMCP:
                             "top_n": {
                                 "type": "integer",
                                 "description": "Number of top merchants (default: 10)"
+                            },
+                            "exclude_internal_transfers": {
+                                "type": "boolean",
+                                "description": "Exclude internal transfers like mortgage payments, transfers between own accounts (default: true)"
                             }
                         },
                         "required": ["year", "month"]
@@ -578,6 +582,7 @@ Use this to understand property-related transactions like mortgage interest.""",
         year = args["year"]
         month = args["month"]
         top_n = args.get("top_n", 10)
+        exclude_internal = args.get("exclude_internal_transfers", True)
         
         start_date = date(year, month, 1)
         if month == 12:
@@ -586,22 +591,113 @@ Use this to understand property-related transactions like mortgage interest.""",
             end_date = date(year, month + 1, 1)
         
         cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT 
-                description,
-                SUM(ABS(amount)) as total,
-                COUNT(*) as count
-            FROM transactions
-            WHERE date >= %s AND date < %s AND amount < 0
-            GROUP BY description
-            ORDER BY total DESC
-            LIMIT %s
-        """, (start_date, end_date, top_n))
+        
+        if exclude_internal:
+            # Internal transfer detection using two methods:
+            #
+            # METHOD 1: Double-Entry Matching (Primary)
+            # Match a debit in account A with a credit of the same amount
+            # on the same date (±1 day) in account B.
+            #
+            # METHOD 2: Pattern-Based Fallback
+            # For transfers to external accounts not in our system, use
+            # description patterns and bank categories.
+            #
+            # We also exclude:
+            # - Loan accounts (mortgage interest/fees are not merchant spending)
+            # - Interest charges (INT category)
+            cursor.execute("""
+                WITH matched_transfer_ids AS (
+                    -- METHOD 1: Double-entry matching
+                    -- Find debits that have a matching credit in another account
+                    SELECT DISTINCT t1.id
+                    FROM transactions t1
+                    INNER JOIN transactions t2 ON
+                        -- Same absolute amount (debit matches credit)
+                        ABS(t1.amount) = ABS(t2.amount)
+                        -- Opposite signs (one debit, one credit)
+                        AND t1.amount < 0
+                        AND t2.amount > 0
+                        -- Same date or within 1 day (transfers may post on different days)
+                        AND ABS(t1.date - t2.date) <= 1
+                        -- Different accounts
+                        AND t1.account_id != t2.account_id
+                    WHERE t1.date >= %s AND t1.date < %s
+                ),
+                pattern_transfer_ids AS (
+                    -- METHOD 2: Pattern-based fallback
+                    -- Catch transfers to external accounts not in our system
+                    SELECT id FROM transactions
+                    WHERE date >= %s AND date < %s
+                        AND amount < 0
+                        AND (
+                            -- Bank transfer categories
+                            COALESCE(original_category, '') IN ('TFR', 'PAYMENT')
+                            OR COALESCE(original_category, '') LIKE 'Financial > Transfer%%'
+                            -- Description patterns: transfers to banks
+                            OR LOWER(description) LIKE 'transfer to%%'
+                            OR LOWER(description) LIKE 'to westpac%%'
+                            OR LOWER(description) LIKE 'to anz%%'
+                            OR LOWER(description) LIKE 'to cba%%'
+                            OR LOWER(description) LIKE 'to macquarie%%'
+                            OR LOWER(description) LIKE 'to bankwest%%'
+                            OR LOWER(description) LIKE 'to bw%%'
+                            -- Westpac mortgage auto-debits
+                            OR LOWER(description) LIKE '%%payment by authority to westpac bankcorp%%'
+                            -- Westpac internal transfers
+                            OR LOWER(description) LIKE '%%withdrawal online%%tfr%%'
+                            OR LOWER(description) LIKE '%%withdrawal mobile%%pymt%%'
+                            -- ANZ internet banking transfers
+                            OR LOWER(description) LIKE '%%anz internet banking%%payment%%to%%'
+                            -- Investment platform transfers (IBKR)
+                            OR LOWER(description) LIKE '%%pymt interactiv%%'
+                            OR LOWER(description) LIKE '%%interactive brokers%%'
+                            -- Large ATM withdrawals (CASH category, likely not merchant)
+                            OR (LOWER(original_category) = 'cash' AND ABS(amount) > 5000)
+                        )
+                ),
+                all_transfer_ids AS (
+                    SELECT id FROM matched_transfer_ids
+                    UNION
+                    SELECT id FROM pattern_transfer_ids
+                )
+                SELECT
+                    description,
+                    SUM(ABS(amount)) as total,
+                    COUNT(*) as count
+                FROM transactions
+                WHERE date >= %s AND date < %s
+                    AND amount < 0
+                    -- Exclude all detected internal transfers
+                    AND id NOT IN (SELECT id FROM all_transfer_ids)
+                    -- Exclude loan accounts (mortgage interest/fees)
+                    AND account_type != 'loan'
+                    -- Exclude interest charges
+                    AND COALESCE(original_category, '') != 'INT'
+                    AND description != 'INTEREST'
+                GROUP BY description
+                ORDER BY total DESC
+                LIMIT %s
+            """, (start_date, end_date, start_date, end_date, start_date, end_date, top_n))
+        else:
+            # Include all transactions
+            cursor.execute("""
+                SELECT
+                    description,
+                    SUM(ABS(amount)) as total,
+                    COUNT(*) as count
+                FROM transactions
+                WHERE date >= %s AND date < %s AND amount < 0
+                GROUP BY description
+                ORDER BY total DESC
+                LIMIT %s
+            """, (start_date, end_date, top_n))
         
         rows = cursor.fetchall()
         return {
             "year": year,
             "month": month,
+            "exclude_internal_transfers": exclude_internal,
             "top_merchants": [
                 {
                     "description": row[0],
