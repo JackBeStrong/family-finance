@@ -9,6 +9,8 @@ WORKDIR /app
 # Note: requirements-scraper.txt is renamed to requirements.txt by Ansible playbook
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-scraper.txt .
+RUN pip install --no-cache-dir -r requirements-scraper.txt
 
 # Copy scraper code
 COPY src/scrapers/ ./src/scrapers/
