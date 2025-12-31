@@ -97,17 +97,34 @@ async def scrape_westpac(headless: bool = True, slow_mo: int = 0) -> bool:
     
     # Start Playwright
     async with async_playwright() as p:
-        # Launch browser
+        # Launch browser with consistent settings
         logger.info(f"Launching browser (headless={headless}, slow_mo={slow_mo}ms)...")
         browser = await p.chromium.launch(
             headless=headless,
             slow_mo=slow_mo,
-            args=['--no-sandbox', '--disable-setuid-sandbox']  # Required for Docker
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+            ]
         )
         
         try:
-            # Create a new page
-            page = await browser.new_page()
+            # Create a new browser context with consistent settings
+            # These settings match a typical Linux desktop Chrome browser
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                locale='en-AU',
+                timezone_id='Australia/Sydney',
+                # Disable webdriver detection
+                extra_http_headers={
+                    'Accept-Language': 'en-AU,en;q=0.9',
+                }
+            )
+            
+            # Create a new page from the context
+            page = await context.new_page()
             
             # Step 1: Navigate to login page
             logger.info("Step 1: Navigating to Westpac login page...")
