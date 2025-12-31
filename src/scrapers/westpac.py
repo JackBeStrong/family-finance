@@ -14,6 +14,7 @@ What it does:
 
 import asyncio
 import os
+from datetime import datetime
 from pathlib import Path
 
 # Load .env file
@@ -96,37 +97,85 @@ async def main():
         await page.screenshot(path=str(screenshot_path / "westpac_export_page.png"))
         print(f"📸 Screenshot saved to: {screenshot_path / 'westpac_export_page.png'}")
         
-        # Step 6: Click the account dropdown and select "All"
-        print("\n📍 Step 6: Selecting all accounts...")
-        
-        # From DevTools inspection: the input has id="Accounts_1"
-        # Click on it to open the dropdown
-        print("🖱️  Clicking account dropdown (id=Accounts_1)...")
-        await page.locator("#Accounts_1").click()
+        # Step 6: Click "Select multiple" link to open the popup
+        print("\n📍 Step 6: Clicking 'Select multiple' link...")
+        await page.locator("a.select-multiple").click()
         await asyncio.sleep(1)
         
-        # Take screenshot to see dropdown state
-        await page.screenshot(path=str(screenshot_path / "westpac_dropdown_open.png"))
-        print("📸 Screenshot: westpac_dropdown_open.png")
+        # Take screenshot to see popup
+        await page.screenshot(path=str(screenshot_path / "westpac_select_multiple_popup.png"))
+        print("📸 Screenshot: westpac_select_multiple_popup.png")
         
-        # Now click "All" option - it's an <a class="select-all">
-        print("🖱️  Clicking 'All' option (a.select-all)...")
-        await page.locator("a.select-all").click()
-        print("✅ All accounts selected")
+        # Step 7: Click the "Select" checkbox (first checkbox - selects all)
+        print("\n📍 Step 7: Clicking 'Select' checkbox to select all accounts...")
+        # From DevTools: <input type="checkbox" id="_selectall" name="selectall" class="table-row-multi-select">
+        await page.locator("#_selectall").click()
+        await asyncio.sleep(0.5)
+        print("✅ Select all checkbox clicked")
         
-        await asyncio.sleep(2)
+        # Take screenshot
+        await page.screenshot(path=str(screenshot_path / "westpac_all_selected.png"))
+        print("📸 Screenshot: westpac_all_selected.png")
         
-        # Take another screenshot to see the result
+        # Step 8: Click "Continue" button
+        print("\n📍 Step 8: Clicking 'Continue' button...")
+        await page.locator("button.btn-submit.btn-primary").click()
+        await asyncio.sleep(1)
+        print("✅ Continue clicked")
+        
+        # Take screenshot to see result
         await page.screenshot(path=str(screenshot_path / "westpac_accounts_selected.png"))
-        print(f"📸 Screenshot saved to: {screenshot_path / 'westpac_accounts_selected.png'}")
+        print(f"📸 Screenshot: westpac_accounts_selected.png")
         
-        # Step 7: Wait and observe what's next
-        print("\n⏳ Waiting 30 seconds so you can see what's next...")
-        print("   Look for:")
-        print("   - Export/Download button")
-        print("   - Format selector (CSV)")
+        # Step 9: Select date range - "Last 7 days"
+        print("\n📍 Step 9: Selecting date range 'Last 7 days'...")
         
-        await asyncio.sleep(30)
+        # Click "a preset range" link to open the dropdown
+        print("🖱️  Clicking 'a preset range' link...")
+        await page.locator("a.flyout-launcher.picker-text").click()
+        await asyncio.sleep(0.5)
+        
+        # Click "Last 7 days" option
+        print("🖱️  Clicking 'Last 7 days'...")
+        await page.locator("a.link-icon.icon-arrow").filter(has_text="Last 7 days").click()
+        await asyncio.sleep(0.5)
+        print("✅ Date range selected: Last 7 days")
+        
+        # Take screenshot
+        await page.screenshot(path=str(screenshot_path / "westpac_date_selected.png"))
+        print("📸 Screenshot: westpac_date_selected.png")
+        
+        # Step 10: Click Export and download CSV
+        print("\n📍 Step 10: Clicking Export button and downloading CSV...")
+        
+        # Set up download handler BEFORE clicking
+        download_dir = Path("incoming/westpac-homeloan-offset")
+        download_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use expect_download to capture the file
+        async with page.expect_download() as download_info:
+            await page.locator("button.export-link.btn-primary").click()
+            print("🖱️  Clicked Export button, waiting for download...")
+        
+        download = await download_info.value
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"westpac_export_{timestamp}.csv"
+        save_path = download_dir / filename
+        
+        # Save the file
+        await download.save_as(str(save_path))
+        print(f"✅ Downloaded: {save_path}")
+        
+        # Take final screenshot
+        await page.screenshot(path=str(screenshot_path / "westpac_export_complete.png"))
+        print("📸 Screenshot: westpac_export_complete.png")
+        
+        print("\n🎉 Export complete!")
+        print(f"   File saved to: {save_path}")
+        
+        await asyncio.sleep(5)
         
         # Print final URL
         print(f"\n📍 Final URL: {page.url}")
