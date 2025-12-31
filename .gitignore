@@ -60,3 +60,7 @@ logs/
 
 # roo
 .roo/
+
+# data
+.data/
+.incoming/
