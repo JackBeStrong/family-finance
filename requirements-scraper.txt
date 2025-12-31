@@ -1,3 +1,4 @@
 # Requirements for Westpac Scraper
-playwright>=1.49.0
+# Pin playwright version to match Docker image (mcr.microsoft.com/playwright/python:v1.49.0-noble)
+playwright==1.49.0
 python-dotenv>=1.0.0
