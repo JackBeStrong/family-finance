@@ -1,0 +1,27 @@
+# Dockerfile for Westpac Scraper
+# Uses Playwright with Chromium for headless browser automation
+
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
+
+WORKDIR /app
+
+# Install Python dependencies
+# Note: requirements-scraper.txt is renamed to requirements.txt by Ansible playbook
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy scraper code
+COPY src/scrapers/ ./src/scrapers/
+COPY src/__init__.py ./src/
+
+# Create directories for screenshots and downloads
+RUN mkdir -p /app/data/scraper_state/screenshots /app/incoming/westpac-homeloan-offset
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV HEADLESS=true
+ENV SCREENSHOT_DIR=/app/data/scraper_state/screenshots
+ENV DOWNLOAD_DIR=/app/incoming/westpac-homeloan-offset
+
+# Run the scraper
+ENTRYPOINT ["python", "-m", "src.scrapers.westpac"]
