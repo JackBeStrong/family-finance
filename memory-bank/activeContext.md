@@ -153,6 +153,9 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-31 19:17:00 AEDT] - Scraper runs headless in Docker with consistent browser fingerprint (Chrome 131 on Linux)
 * [2025-12-31 19:17:00 AEDT] - Daily cron job at 6am AEDT downloads last 7 days of transactions
 * [2025-12-31 19:17:00 AEDT] - Downloads to NFS mount, file watcher auto-imports to PostgreSQL
+* [2025-12-31 19:37:00 AEDT] - **Scraper Fail-Safe**: Added lock file mechanism to prevent repeated failed login attempts
+* [2025-12-31 19:37:00 AEDT] - On failure, creates `data/scraper_state/westpac.lock` - subsequent runs refuse to execute
+* [2025-12-31 19:37:00 AEDT] - Prevents account lockouts; manual `rm westpac.lock` required to resume after debugging
 
 ## Key Files
 

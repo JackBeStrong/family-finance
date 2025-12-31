@@ -1,5 +1,7 @@
 # Progress
 
+[2025-12-31 19:37:00 AEDT] - Added fail-safe lock mechanism to Westpac scraper to prevent account lockouts from repeated failed login attempts
+
 This file tracks the project's progress using a task list format.
 
 ## Phase 1: Bank Statement Import System ✓ COMPLETE

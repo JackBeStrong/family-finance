@@ -10,6 +10,7 @@ Environment Variables:
     SLOW_MO: Milliseconds to slow down actions (default: 0 in headless, 500 in visible)
     SCREENSHOT_DIR: Directory for screenshots (default: data/scraper_state/screenshots)
     DOWNLOAD_DIR: Directory for downloaded files (default: incoming/westpac-homeloan-offset)
+    LOCK_DIR: Directory for lock files (default: data/scraper_state)
 
 What it does:
 1. Opens browser (headless by default for automation)
@@ -18,6 +19,13 @@ What it does:
 4. Clicks "Sign in"
 5. Navigates to export page
 6. Selects all accounts and exports last 7 days as CSV
+
+Fail-Safe Mechanism:
+- If any scrape attempt fails, a lock file is created
+- Subsequent runs will refuse to execute while the lock file exists
+- This prevents account lockouts from repeated failed login attempts
+- To resume: manually delete the lock file after debugging
+  Lock file location: data/scraper_state/westpac.lock
 """
 
 import argparse
@@ -41,6 +49,50 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
+
+# Lock file configuration
+LOCK_FILE_NAME = "westpac.lock"
+
+
+def get_lock_file_path() -> Path:
+    """Get the path to the lock file."""
+    lock_dir = Path(os.getenv("LOCK_DIR", "data/scraper_state"))
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    return lock_dir / LOCK_FILE_NAME
+
+
+def is_locked() -> bool:
+    """Check if the scraper is locked due to a previous failure."""
+    return get_lock_file_path().exists()
+
+
+def create_lock(reason: str) -> None:
+    """Create a lock file with failure details."""
+    lock_path = get_lock_file_path()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lock_content = f"""Westpac Scraper LOCKED
+======================
+Timestamp: {timestamp}
+Reason: {reason}
+
+This lock file was created because the scraper failed.
+The scraper will NOT run again until this file is manually deleted.
+
+To resume scraping after debugging:
+  rm {lock_path}
+
+Check screenshots in data/scraper_state/screenshots/ for debugging.
+"""
+    lock_path.write_text(lock_content)
+    logger.warning(f"Lock file created: {lock_path}")
+
+
+def clear_lock() -> None:
+    """Remove the lock file (for manual use or after successful run)."""
+    lock_path = get_lock_file_path()
+    if lock_path.exists():
+        lock_path.unlink()
+        logger.info(f"Lock file removed: {lock_path}")
 
 
 def parse_args():
@@ -275,6 +327,27 @@ async def main():
     """Main entry point."""
     args = parse_args()
     
+    # Check for lock file FIRST - refuse to run if locked
+    if is_locked():
+        lock_path = get_lock_file_path()
+        logger.error("=" * 60)
+        logger.error("SCRAPER IS LOCKED - Previous run failed")
+        logger.error("=" * 60)
+        logger.error(f"Lock file exists: {lock_path}")
+        logger.error("")
+        logger.error("The scraper will NOT run to prevent account lockout.")
+        logger.error("Please debug the issue manually, then remove the lock file:")
+        logger.error(f"  rm {lock_path}")
+        logger.error("")
+        logger.error("Lock file contents:")
+        logger.error("-" * 40)
+        try:
+            logger.error(lock_path.read_text())
+        except Exception:
+            pass
+        logger.error("=" * 60)
+        sys.exit(2)  # Exit code 2 = locked
+    
     # --visible overrides --headless
     headless = not args.visible if args.visible else args.headless
     slow_mo = args.slow_mo if args.slow_mo else (500 if not headless else 0)
@@ -285,7 +358,14 @@ async def main():
         logger.info("Scraper completed successfully")
         sys.exit(0)
     else:
-        logger.error("Scraper failed")
+        # Create lock file on failure to prevent subsequent runs
+        create_lock("Scraper returned failure status. Check logs and screenshots for details.")
+        logger.error("=" * 60)
+        logger.error("SCRAPER FAILED - Lock file created")
+        logger.error("=" * 60)
+        logger.error("The scraper will NOT run again until manually unlocked.")
+        logger.error(f"To resume after debugging: rm {get_lock_file_path()}")
+        logger.error("=" * 60)
         sys.exit(1)
 
 
