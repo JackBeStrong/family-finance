@@ -223,13 +223,37 @@ Dividends: $338.28 USD (QQQM: $255.82, SOXX: $82.46)
 Realized Gains: +$4,453.93 USD from AMZN trade
 ```
 
-## Phase 5: Transaction Categorization (Future)
+## Phase 5: Westpac Bank Scraper ✓ COMPLETE
+
+### Completed Tasks
+* [2025-12-31 19:17:00 AEDT] - Created headless Playwright scraper for Westpac bank
+* [2025-12-31 19:17:00 AEDT] - Added consistent browser fingerprint (Chrome 131 on Linux, 1920x1080, en-AU locale)
+* [2025-12-31 19:17:00 AEDT] - Created Dockerfile.scraper using Microsoft Playwright image
+* [2025-12-31 19:17:00 AEDT] - Pinned playwright==1.49.0 to match Docker image
+* [2025-12-31 19:17:00 AEDT] - Updated Ansible playbook with scraper deployment
+* [2025-12-31 19:17:00 AEDT] - Added daily cron job at 6am AEDT
+* [2025-12-31 19:17:00 AEDT] - Downloads to NFS mount for file watcher auto-import
+* [2025-12-31 19:17:00 AEDT] - Logs shipped to Kafka via Filebeat
+
+### Scraper Details
+- **On-demand script**: `/usr/local/bin/run-westpac-scraper.sh`
+- **Cron**: Daily at 6am AEDT
+- **Logs**: `/var/log/finance-scraper/cron.log`
+- **Screenshots**: `/var/log/finance-scraper/screenshots/`
+- **Downloads**: NFS mount (`westpac-homeloan-offset/`)
+
+### Key Files
+- `src/scrapers/westpac.py` - Playwright scraper with headless support
+- `Dockerfile.scraper` - Microsoft Playwright Docker image
+- `requirements-scraper.txt` - Pinned playwright==1.49.0
+
+## Phase 6: Transaction Categorization (Future)
 
 * [ ] Add more category rules to financial-context.yaml
 * [ ] Implement rule-based auto-categorization at import time
 * [ ] Add manual category assignment UI
 
-## Phase 6: Home Loan Management (Future)
+## Phase 7: Home Loan Management (Future)
 
 * [ ] Mortgage tracking
 * [ ] Extra payment calculations

@@ -8,11 +8,13 @@ This file tracks the project's current status, including recent changes, current
 * **Phase 2 Complete**: MCP server deployed with 12 tools (9 original + 3 context tools)
 * **Phase 3 Complete**: Financial Context Store for better categorization
 * **Phase 4 Complete**: IBKR Investment Portfolio Integration
+* **Phase 5 Complete**: Westpac Bank Scraper for automated CSV downloads
 * System is running in production on LXC container
 * 768 transactions imported from 5 banks
 * MCP server exposing 12 tools for AI-powered reporting
 * Report generator using financial context for enriched categorization
-* **NEW**: Monthly reports now include IBKR investment portfolio data
+* Monthly reports include IBKR investment portfolio data
+* **NEW**: Westpac scraper runs daily at 6am to auto-download transactions
 
 ## System Status
 
@@ -147,6 +149,10 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-31 15:27:00 AEDT] - **Internal Transfer Detection**: Enhanced `get_top_merchants` to filter out internal transfers
 * [2025-12-31 15:27:00 AEDT] - Uses two-method approach: (1) Double-entry matching (debit in A = credit in B on same date), (2) Pattern-based fallback
 * [2025-12-31 15:27:00 AEDT] - Added `exclude_internal_transfers` parameter (default: true) to `get_top_merchants` tool
+* [2025-12-31 19:17:00 AEDT] - **Westpac Scraper**: Automated bank statement download using Playwright
+* [2025-12-31 19:17:00 AEDT] - Scraper runs headless in Docker with consistent browser fingerprint (Chrome 131 on Linux)
+* [2025-12-31 19:17:00 AEDT] - Daily cron job at 6am AEDT downloads last 7 days of transactions
+* [2025-12-31 19:17:00 AEDT] - Downloads to NFS mount, file watcher auto-imports to PostgreSQL
 
 ## Key Files
 
