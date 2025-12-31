@@ -144,6 +144,9 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-31 09:52:00 AEDT] - Added `--no-email` flag for testing (prints to stdout instead of emailing)
 * [2025-12-31 09:52:00 AEDT] - Changed Dockerfile.report from CMD to ENTRYPOINT to allow argument passing
 * [2025-12-31 09:52:00 AEDT] - Updated Ansible playbook to pass `$@` arguments to Docker container
+* [2025-12-31 15:27:00 AEDT] - **Internal Transfer Detection**: Enhanced `get_top_merchants` to filter out internal transfers
+* [2025-12-31 15:27:00 AEDT] - Uses two-method approach: (1) Double-entry matching (debit in A = credit in B on same date), (2) Pattern-based fallback
+* [2025-12-31 15:27:00 AEDT] - Added `exclude_internal_transfers` parameter (default: true) to `get_top_merchants` tool
 
 ## Key Files
 

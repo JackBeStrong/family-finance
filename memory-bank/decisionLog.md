@@ -4,6 +4,72 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2025-12-31 15:27:00 AEDT] - Internal Transfer Detection for Top Merchants
+
+### Decision
+Enhanced `get_top_merchants` MCP tool to automatically filter out internal transfers between accounts, providing more meaningful merchant spending analysis.
+
+### Context
+- Top merchants report was dominated by internal transfers (mortgage payments, account transfers)
+- Example: "PAYMENT BY AUTHORITY TO WESTPAC BANKCORP" showing as top "merchant"
+- These aren't actual merchant spending - they're money moving between user's own accounts
+- User wanted to see actual spending patterns, not internal money movement
+
+### Rationale
+- **Double-entry matching (primary)**: Industry-standard accounting approach
+  - If debit in Account A matches credit in Account B (same amount, same date ±1 day), it's a transfer
+  - Most accurate method, used by QuickBooks, Xero, and other accounting software
+- **Pattern-based fallback (secondary)**: Catches transfers to external accounts not in system
+  - Bank categories: TFR, PAYMENT, Financial > Transfers
+  - Description patterns: "Transfer to", "To Westpac", "PAYMENT BY AUTHORITY"
+  - Investment transfers: Interactive Brokers
+  - Large ATM withdrawals (>$5000 with CASH category)
+- **Account type exclusion**: Loan accounts excluded entirely (mortgage interest isn't merchant spending)
+
+### Implementation
+```sql
+WITH matched_transfer_ids AS (
+    -- Double-entry matching: debit in A = credit in B
+    SELECT DISTINCT t1.id
+    FROM transactions t1
+    INNER JOIN transactions t2 ON
+        ABS(t1.amount) = ABS(t2.amount)
+        AND t1.amount < 0 AND t2.amount > 0
+        AND ABS(t1.date - t2.date) <= 1
+        AND t1.account_id != t2.account_id
+),
+pattern_transfer_ids AS (
+    -- Pattern-based fallback
+    SELECT id FROM transactions
+    WHERE original_category IN ('TFR', 'PAYMENT')
+       OR description LIKE 'Transfer to%'
+       -- ... more patterns
+)
+SELECT ... WHERE id NOT IN (matched_transfer_ids UNION pattern_transfer_ids)
+```
+
+### API Change
+- Added `exclude_internal_transfers` parameter to `get_top_merchants` (default: `true`)
+- Set to `false` to see all transactions including transfers
+
+### Industry Comparison
+| Method | Used By | Pros | Cons |
+|--------|---------|------|------|
+| Account Linking | Mint, YNAB | Accurate | Requires all accounts linked |
+| Bank Categories | Banks | Easy | Bank-specific, inconsistent |
+| ML Models | Plaid, Yodlee | Handles edge cases | Complex, needs training data |
+| Double-Entry | QuickBooks, Xero | Accounting standard | Needs both sides of transfer |
+| Pattern Rules | Tiller, Lunch Money | Customizable | Maintenance burden |
+
+Our approach combines Double-Entry (primary) + Pattern Rules (fallback) for best coverage.
+
+### Implications
+- Top merchants now shows actual spending (groceries, utilities, subscriptions)
+- Mortgage payments, inter-account transfers filtered out
+- Users can still see all transactions with `exclude_internal_transfers: false`
+
+---
+
 ## [2025-12-31 09:52:00 AEDT] - Date Range Support for Report Generator
 
 ### Decision
