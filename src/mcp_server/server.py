@@ -60,7 +60,8 @@ def get_context_store() -> FinancialContextStore:
 
 
 # Create the FastMCP server
-mcp = FastMCP("family-finance-mcp", stateless_http=True)
+# Configure host to 0.0.0.0 for external access in Docker
+mcp = FastMCP("family-finance-mcp", stateless_http=True, host="0.0.0.0", port=8000)
 
 
 # ==========================================
@@ -544,4 +545,4 @@ def get_database_stats() -> dict:
 
 # Run with streamable HTTP transport
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+    mcp.run(transport="streamable-http")
