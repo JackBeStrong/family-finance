@@ -40,6 +40,7 @@
 | NAS (Unraid) | Physical | 192.168.1.200 | Stores CSV files in `/mnt/user/datastore/tools/bank-statements/` |
 | Proxmox Host | Physical | 192.168.1.200 | Hosts LXC containers |
 | File Watcher | LXC 128 | 192.168.1.237 | Docker container running `family-finance` |
+| MCP Server | LXC 128 | 192.168.1.237:8000 | Streamable HTTP transport at `/mcp` |
 | PostgreSQL | LXC 110 | 192.168.1.228 | Database server, `family_finance` database |
 | Ansible Server | LXC | 192.168.1.xxx | Deploys and manages infrastructure |
 
@@ -331,6 +332,74 @@ category_rules:
 
 ---
 
+## MCP Server Transport Pattern
+
+### Streamable HTTP (Modern Protocol)
+
+The MCP server uses Streamable HTTP transport, the modern replacement for deprecated SSE.
+
+```
+┌─────────────────┐     HTTP POST      ┌─────────────────┐
+│   MCP Client    │ ─────────────────▶ │   MCP Server    │
+│  (Roo, Report)  │ ◀───────────────── │  (FastMCP)      │
+└─────────────────┘   JSON Response    └─────────────────┘
+                                              │
+                         Single endpoint: /mcp
+```
+
+### Configuration
+
+**Server** (`src/mcp_server/server.py`):
+```python
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("family-finance-mcp", stateless_http=True, host="0.0.0.0", port=8000)
+
+@mcp.tool()
+def get_monthly_summary(year: int, month: int) -> dict:
+    """Tool implementation..."""
+    pass
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http")
+```
+
+**Client - Roo** (`.roo/mcp.json`):
+```json
+{
+  "family-finance": {
+    "type": "streamable-http",
+    "url": "http://192.168.1.237:8000/mcp"
+  }
+}
+```
+
+**Client - mcp-agent** (`mcp_agent.config.yaml`):
+```yaml
+mcp:
+  servers:
+    family-finance:
+      transport: streamable_http  # Note: underscore, not hyphen!
+      url: "http://192.168.1.237:8000/mcp"
+```
+
+### Key Differences from SSE
+
+| Aspect | SSE (deprecated) | Streamable HTTP |
+|--------|------------------|-----------------|
+| Endpoints | `/sse` + `/messages/` | Single `/mcp` |
+| Method | GET + POST | HTTP POST only |
+| Port | 8080 | 8000 (FastMCP default) |
+| Streaming | Server-Sent Events | HTTP response streaming |
+
+### Important Notes
+- FastMCP requires `host="0.0.0.0"` in constructor for Docker/external access
+- mcp-agent uses `streamable_http` (underscore), Roo uses `streamable-http` (hyphen)
+- `stateless_http=True` recommended for production scalability
+
+---
+
 [2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
 [2025-12-29 18:15:00 AEDT] - Added deployment architecture and PostgreSQL patterns
 [2025-12-30 20:20:00 AEDT] - Added Financial Context Store pattern
+[2026-01-03 10:44:00 AEDT] - Added MCP Server Transport Pattern (Streamable HTTP)

@@ -22,7 +22,7 @@ This file tracks the project's current status, including recent changes, current
 | Component | Status | Details |
 |-----------|--------|---------|
 | File Watcher | Running | LXC 128 (192.168.1.237), Docker container |
-| MCP Server | Running | LXC 128 (192.168.1.237:8080), Docker container |
+| MCP Server | Running | LXC 128 (192.168.1.237:8000), Docker container, Streamable HTTP |
 | PostgreSQL | Running | LXC 110 (192.168.1.228), `family_finance` database |
 | NFS Mount | Active | `/mnt/user/datastore/tools/bank-statements/` |
 
@@ -33,8 +33,8 @@ This file tracks the project's current status, including recent changes, current
 {
   "mcpServers": {
     "family-finance": {
-      "url": "http://192.168.1.237:8080/sse",
-      "transportType": "sse"
+      "type": "streamable-http",
+      "url": "http://192.168.1.237:8000/mcp"
     }
   }
 }
@@ -156,6 +156,11 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2025-12-31 19:37:00 AEDT] - **Scraper Fail-Safe**: Added lock file mechanism to prevent repeated failed login attempts
 * [2025-12-31 19:37:00 AEDT] - On failure, creates `data/scraper_state/westpac.lock` - subsequent runs refuse to execute
 * [2025-12-31 19:37:00 AEDT] - Prevents account lockouts; manual `rm westpac.lock` required to resume after debugging
+* [2026-01-03 10:43:00 AEDT] - **MCP Transport Migration**: Migrated from SSE to Streamable HTTP (modern MCP protocol)
+* [2026-01-03 10:43:00 AEDT] - Changed MCP server port from 8080 to 8000 (FastMCP default)
+* [2026-01-03 10:43:00 AEDT] - Updated server to use FastMCP with `host="0.0.0.0"` for external access
+* [2026-01-03 10:43:00 AEDT] - Updated report generator client to use `streamable_http_client`
+* [2026-01-03 10:43:00 AEDT] - Fixed mcp_agent.config.yaml: `streamable_http` (underscore, not hyphen)
 
 ## Key Files
 

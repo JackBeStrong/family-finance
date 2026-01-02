@@ -39,7 +39,7 @@ This file tracks the project's progress using a task list format.
 | Component | Location | Status |
 |-----------|----------|--------|
 | File Watcher | LXC 128 (192.168.1.237) | ✓ Running |
-| MCP Server | LXC 128 (192.168.1.237:8080) | ✓ Running |
+| MCP Server | LXC 128 (192.168.1.237:8000) | ✓ Running (Streamable HTTP) |
 | PostgreSQL | LXC 110 (192.168.1.228) | ✓ Running |
 | NFS Mount | Unraid NAS | ✓ Mounted |
 
@@ -85,12 +85,16 @@ psql -h 192.168.1.228 -U readonly -d family_finance
 * [2025-12-30 16:45:00 AEDT] - Fixed IP conflict (iPhone had same IP as LXC)
 * [2025-12-30 16:45:00 AEDT] - Fixed router DHCP range (was 2-254, now 2-199)
 * [2025-12-30 16:50:00 AEDT] - All 9 MCP tools verified working in production
+* [2026-01-03 10:43:00 AEDT] - **MCP Transport Migration**: Migrated from SSE to Streamable HTTP
+* [2026-01-03 10:43:00 AEDT] - Changed port from 8080 to 8000 (FastMCP default)
+* [2026-01-03 10:43:00 AEDT] - Refactored server to use FastMCP with `@mcp.tool()` decorators
+* [2026-01-03 10:43:00 AEDT] - Updated report generator client to use `streamable_http_client`
 
 ### MCP Server Configuration
-- **URL**: http://192.168.1.237:8080
-- **SSE Endpoint**: http://192.168.1.237:8080/sse
-- **Messages Endpoint**: http://192.168.1.237:8080/messages/
-- **Roo Config**: `.roo/mcp.json`
+- **URL**: http://192.168.1.237:8000
+- **Streamable HTTP Endpoint**: http://192.168.1.237:8000/mcp
+- **Transport**: Streamable HTTP (modern MCP protocol, replaces deprecated SSE)
+- **Roo Config**: `.roo/mcp.json` with `type: streamable-http`
 
 ### Available MCP Tools (12 total)
 

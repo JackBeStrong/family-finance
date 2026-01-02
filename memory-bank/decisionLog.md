@@ -4,6 +4,58 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2026-01-03 10:43:00 AEDT] - MCP Transport Migration: SSE to Streamable HTTP
+
+### Decision
+Migrated the MCP server from SSE (Server-Sent Events) transport to Streamable HTTP, the modern MCP protocol.
+
+### Context
+- SSE transport is being deprecated in the MCP specification
+- Streamable HTTP is the recommended transport for production deployments
+- The existing SSE implementation used `/sse` + `/messages/` endpoints
+
+### Rationale
+- **Streamable HTTP is the future**: Single `/mcp` endpoint using HTTP POST with bidirectional streaming
+- **Better scalability**: Supports stateless operation mode for multi-node deployments
+- **FastMCP simplification**: High-level SDK with `@mcp.tool()` decorators reduces boilerplate
+- **Industry direction**: MCP SDK documentation recommends Streamable HTTP for production
+
+### Implementation
+
+1. **Server Refactoring** (`src/mcp_server/server.py`):
+   - Replaced custom Starlette app with FastMCP
+   - Changed from ~1000 lines to ~500 lines using `@mcp.tool()` decorators
+   - Added `host="0.0.0.0"` and `port=8000` in FastMCP constructor for external access
+
+2. **Client Updates** (`src/report_generator/agentic_report.py`):
+   - Changed import from `mcp.client.sse.sse_client` to `mcp.client.streamable_http.streamable_http_client`
+   - Updated client usage (returns 3 values instead of 2)
+
+3. **Configuration Updates**:
+   - `.roo/mcp.json`: `type: streamable-http`, URL: `http://192.168.1.237:8000/mcp`
+   - `mcp_agent.config.yaml`: `transport: streamable_http` (underscore, not hyphen!)
+   - Ansible playbook: Changed port mapping from 8080 to 8000
+
+### Key Gotchas
+- **FastMCP host binding**: Must set `host="0.0.0.0"` in constructor, not in `run()` method
+- **mcp-agent config**: Uses `streamable_http` (underscore), not `streamable-http` (hyphen)
+- **Roo config**: Uses `streamable-http` (hyphen) - different from mcp-agent!
+
+### Protocol Comparison
+| Aspect | SSE (deprecated) | Streamable HTTP (modern) |
+|--------|------------------|--------------------------|
+| Endpoint | `/sse` + `/messages/` | Single `/mcp` |
+| Method | GET (SSE) + POST | HTTP POST |
+| Default Port | 8080 | 8000 |
+| Config Type | `sse` | `streamable-http` or `streamable_http` |
+
+### Implications
+- All MCP clients need to update their transport configuration
+- Report generator Docker image needs rebuild to pick up new config
+- Existing SSE clients will fail until updated
+
+---
+
 ## [2025-12-31 15:27:00 AEDT] - Internal Transfer Detection for Top Merchants
 
 ### Decision
