@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "family-finance": {
-      "url": "http://192.168.1.237:8080/sse",
+      "type": "streamable-http",
+      "url": "http://192.168.1.237:8000/mcp",
       "disabled": false,
       "alwaysAllow": [
         "get_monthly_summary",

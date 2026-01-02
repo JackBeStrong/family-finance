@@ -1,12 +1,13 @@
 # Family Finance MCP Server
 # Exposes PostgreSQL transaction data via Model Context Protocol (MCP)
+# Uses Streamable HTTP transport (modern MCP protocol)
 #
 # Build:
 #   docker build -f Dockerfile.mcp -t family-finance-mcp .
 #
 # Run:
 #   docker run -d --name family-finance-mcp \
-#     -p 8080:8080 \
+#     -p 8000:8000 \
 #     -e DB_HOST=192.168.1.228 \
 #     -e DB_PORT=5432 \
 #     -e DB_NAME=family_finance \
@@ -29,12 +30,8 @@ COPY src/ ./src/
 # Copy configuration files (financial context for categorization)
 COPY config/ ./config/
 
-# Expose MCP server port
-EXPOSE 8080
+# Expose MCP server port (FastMCP default)
+EXPOSE 8000
 
-# Health check - verify SSE endpoint is responding
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -sf http://localhost:8080/sse --max-time 2 | head -1 || exit 1
-
-# Run MCP server with SSE transport
-CMD ["python", "-m", "src.mcp_server.server", "--transport", "sse", "--port", "8080"]
+# Run MCP server with Streamable HTTP transport
+CMD ["python", "-m", "src.mcp_server.server"]
