@@ -17,7 +17,7 @@ import logging
 from typing import Optional, Any
 from dataclasses import dataclass
 
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp import ClientSession
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,8 @@ async def generate_report(
     """
     logger.info(f"Connecting to MCP server at {config.mcp_server_url}")
     
-    async with sse_client(config.mcp_server_url) as (read_stream, write_stream):
+    # Use Streamable HTTP transport (modern MCP protocol)
+    async with streamable_http_client(config.mcp_server_url) as (read_stream, write_stream, _):
         async with ClientSession(read_stream, write_stream) as session:
             # Initialize MCP session
             await session.initialize()

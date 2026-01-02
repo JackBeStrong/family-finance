@@ -6,8 +6,8 @@ execution_engine: asyncio
 mcp:
   servers:
     family-finance:
-      transport: sse
-      url: "http://192.168.1.237:8080/sse"
+      transport: streamable-http
+      url: "http://192.168.1.237:8000/mcp"
     
     interactive-brokers:
       transport: stdio

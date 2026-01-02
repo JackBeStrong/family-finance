@@ -17,7 +17,7 @@ Environment Variables:
     SMTP_PASSWORD: SMTP password
     SENDER_EMAIL: Sender email address
     RECEIVER_EMAIL: Recipient email address
-    MCP_SERVER_URL: MCP server URL (default: http://192.168.1.237:8080/sse)
+    MCP_SERVER_URL: MCP server URL (default: http://192.168.1.237:8000/mcp)
 """
 
 import os
