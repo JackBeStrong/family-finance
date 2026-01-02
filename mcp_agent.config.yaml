@@ -6,7 +6,7 @@ execution_engine: asyncio
 mcp:
   servers:
     family-finance:
-      transport: streamable-http
+      transport: streamable_http
       url: "http://192.168.1.237:8000/mcp"
     
     interactive-brokers:
