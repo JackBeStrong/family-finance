@@ -40,7 +40,7 @@ This file tracks the project's current status, including recent changes, current
 }
 ```
 
-**Available Tools (12 total)**:
+**Available Tools (13 total)**:
 
 *Data Query Tools:*
 - `get_database_stats` - Overall database statistics
@@ -52,8 +52,9 @@ This file tracks the project's current status, including recent changes, current
 - `get_month_comparison` - Month-over-month comparison
 - `query_transactions` - Flexible filtered queries
 - `execute_sql` - Raw SELECT queries (read-only)
+- `get_table_schema` - Get table schema (columns, types, indexes) for SQL query building
 
-*Financial Context Tools (NEW):*
+*Financial Context Tools:*
 - `get_financial_context` - Full context (people, accounts, properties, entities, category rules)
 - `get_account_context` - Account details with linked property resolved
 - `get_property_context` - Property details with linked accounts resolved
@@ -161,6 +162,9 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2026-01-03 10:43:00 AEDT] - Updated server to use FastMCP with `host="0.0.0.0"` for external access
 * [2026-01-03 10:43:00 AEDT] - Updated report generator client to use `streamable_http_client`
 * [2026-01-03 10:43:00 AEDT] - Fixed mcp_agent.config.yaml: `streamable_http` (underscore, not hyphen)
+* [2026-01-03 13:02:00 AEDT] - **Schema Discovery Tool**: Added `get_table_schema` MCP tool for SQL query building
+* [2026-01-03 13:02:00 AEDT] - Returns column names, types, nullability, primary keys, indexes, and sample values
+* [2026-01-03 13:02:00 AEDT] - Helps callers understand table structure before using `execute_sql`
 
 ## Key Files
 

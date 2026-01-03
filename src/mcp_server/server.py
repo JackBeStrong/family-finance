@@ -518,16 +518,16 @@ def get_database_stats() -> dict:
     date_range = cursor.fetchone()
     
     cursor.execute("""
-        SELECT bank_source, COUNT(*) 
-        FROM transactions 
-        GROUP BY bank_source 
+        SELECT bank_source, COUNT(*)
+        FROM transactions
+        GROUP BY bank_source
         ORDER BY COUNT(*) DESC
     """)
     banks = cursor.fetchall()
     
     cursor.execute("""
-        SELECT account_type, COUNT(*) 
-        FROM transactions 
+        SELECT account_type, COUNT(*)
+        FROM transactions
         GROUP BY account_type
     """)
     account_types = cursor.fetchall()
@@ -540,6 +540,101 @@ def get_database_stats() -> dict:
         },
         "banks": [{"bank": row[0], "count": row[1]} for row in banks],
         "account_types": [{"type": row[0], "count": row[1]} for row in account_types]
+    }
+
+
+@mcp.tool()
+def get_table_schema(table_name: str = "transactions") -> dict:
+    """Get the schema (columns, types, constraints) for a database table.
+    
+    Use this to understand the table structure before writing SQL queries with execute_sql.
+    
+    Args:
+        table_name: Name of the table to describe (default: 'transactions')
+    """
+    db = get_db()
+    cursor = db.conn.cursor()
+    
+    # Validate table name to prevent SQL injection
+    allowed_tables = ["transactions"]
+    if table_name not in allowed_tables:
+        return {"error": f"Table '{table_name}' not found. Available tables: {allowed_tables}"}
+    
+    # Get column information from PostgreSQL information_schema
+    cursor.execute("""
+        SELECT
+            column_name,
+            data_type,
+            is_nullable,
+            column_default,
+            character_maximum_length,
+            numeric_precision,
+            numeric_scale
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        ORDER BY ordinal_position
+    """, (table_name,))
+    
+    columns = cursor.fetchall()
+    
+    # Get primary key information
+    cursor.execute("""
+        SELECT a.attname
+        FROM pg_index i
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = %s::regclass AND i.indisprimary
+    """, (table_name,))
+    
+    primary_keys = [row[0] for row in cursor.fetchall()]
+    
+    # Get index information
+    cursor.execute("""
+        SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = %s
+    """, (table_name,))
+    
+    indexes = cursor.fetchall()
+    
+    # Get sample distinct values for key columns (useful for filtering)
+    sample_values = {}
+    for col in ["bank_source", "account_type", "transaction_type"]:
+        cursor.execute(f"""
+            SELECT DISTINCT {col} FROM {table_name}
+            WHERE {col} IS NOT NULL
+            ORDER BY {col}
+            LIMIT 20
+        """)
+        sample_values[col] = [row[0] for row in cursor.fetchall()]
+    
+    return {
+        "table_name": table_name,
+        "columns": [
+            {
+                "name": col[0],
+                "type": col[1],
+                "nullable": col[2] == "YES",
+                "default": col[3],
+                "max_length": col[4],
+                "precision": col[5],
+                "scale": col[6],
+                "is_primary_key": col[0] in primary_keys
+            }
+            for col in columns
+        ],
+        "primary_keys": primary_keys,
+        "indexes": [
+            {"name": idx[0], "definition": idx[1]}
+            for idx in indexes
+        ],
+        "sample_values": sample_values,
+        "notes": {
+            "amount": "Negative values are expenses/debits, positive values are income/credits",
+            "date": "Format: YYYY-MM-DD",
+            "category": "User-assigned category (may be NULL)",
+            "original_category": "Bank-provided category (may be NULL)",
+            "transaction_type": "DEBIT, CREDIT, TRANSFER, etc."
+        }
     }
 
 
