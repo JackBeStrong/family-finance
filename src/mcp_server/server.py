@@ -5,6 +5,11 @@ Family Finance MCP Server
 A Model Context Protocol (MCP) server that exposes PostgreSQL transaction data
 to AI agents using FastMCP.
 
+Uses SQLAlchemy for:
+- Automatic connection pooling (prevents stale connections)
+- Proper transaction management with automatic rollback on errors
+- Session lifecycle management (prevents "aborted transaction" errors)
+
 Usage:
     # Run with streamable HTTP (default, recommended)
     python -m src.mcp_server.server
@@ -21,6 +26,7 @@ from decimal import Decimal
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy import text
 
 # Database imports - reuse existing repository
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -42,12 +48,12 @@ _context_store: Optional[FinancialContextStore] = None
 
 
 def get_db() -> PostgresRepository:
-    """Get or create database connection."""
+    """Get or create database repository with SQLAlchemy connection pooling."""
     global _db
     if _db is None:
-        logger.info("Creating new database connection...")
+        logger.info("Creating new database repository with SQLAlchemy connection pooling...")
         _db = PostgresRepository()
-        logger.info("Database connection established")
+        logger.info("Database repository established (connection pool active)")
     return _db
 
 
@@ -134,6 +140,7 @@ def query_transactions(
     start = date.fromisoformat(start_date) if start_date else None
     end = date.fromisoformat(end_date) if end_date else None
     
+    # Use repository method (already uses SQLAlchemy)
     transactions = db.get_transactions(
         start_date=start,
         end_date=end,
@@ -178,26 +185,27 @@ def get_monthly_summary(year: int, month: int) -> dict:
     else:
         end_date = date(year, month + 1, 1)
     
-    cursor = db.conn.cursor()
-    cursor.execute("""
-        SELECT 
-            COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_income,
-            COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_expenses,
-            COALESCE(SUM(amount), 0) as net,
-            COUNT(*) as transaction_count
-        FROM transactions
-        WHERE date >= %s AND date < %s
-    """, (start_date, end_date))
-    
-    row = cursor.fetchone()
-    return {
-        "year": year,
-        "month": month,
-        "total_income": float(row[0]),
-        "total_expenses": float(row[1]),
-        "net": float(row[2]),
-        "transaction_count": row[3]
-    }
+    # Use SQLAlchemy session with raw SQL via text()
+    # This gets connection pooling + auto-rollback without rewriting complex SQL
+    with db.get_session() as session:
+        result = session.execute(text("""
+            SELECT 
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_expenses,
+                COALESCE(SUM(amount), 0) as net,
+                COUNT(*) as transaction_count
+            FROM transactions
+            WHERE date >= :start_date AND date < :end_date
+        """), {"start_date": start_date, "end_date": end_date}).fetchone()
+        
+        return {
+            "year": year,
+            "month": month,
+            "total_income": float(result[0]),
+            "total_expenses": float(result[1]),
+            "net": float(result[2]),
+            "transaction_count": result[3]
+        }
 
 
 @mcp.tool()
@@ -223,7 +231,7 @@ def get_spending_by_category(year: int, month: int, top_n: int = None) -> dict:
             SUM(ABS(amount)) as total,
             COUNT(*) as count
         FROM transactions
-        WHERE date >= %s AND date < %s AND amount < 0
+        WHERE date >= :start_date AND date < :end_date AND amount < 0
         GROUP BY COALESCE(category, original_category, 'Uncategorized')
         ORDER BY total DESC
     """
@@ -231,26 +239,24 @@ def get_spending_by_category(year: int, month: int, top_n: int = None) -> dict:
     if top_n:
         query += f" LIMIT {int(top_n)}"
     
-    cursor = db.conn.cursor()
-    cursor.execute(query, (start_date, end_date))
-    
-    rows = cursor.fetchall()
-    total_spending = float(sum(row[1] for row in rows))
-    
-    return {
-        "year": year,
-        "month": month,
-        "total_spending": total_spending,
-        "categories": [
-            {
-                "category": row[0],
-                "total": float(row[1]),
-                "count": row[2],
-                "percentage": round(float(row[1]) / total_spending * 100, 1) if total_spending > 0 else 0
-            }
-            for row in rows
-        ]
-    }
+    with db.get_session() as session:
+        rows = session.execute(text(query), {"start_date": start_date, "end_date": end_date}).fetchall()
+        total_spending = float(sum(row[1] for row in rows))
+        
+        return {
+            "year": year,
+            "month": month,
+            "total_spending": total_spending,
+            "categories": [
+                {
+                    "category": row[0],
+                    "total": float(row[1]),
+                    "count": row[2],
+                    "percentage": round(float(row[1]) / total_spending * 100, 1) if total_spending > 0 else 0
+                }
+                for row in rows
+            ]
+        }
 
 
 @mcp.tool()
@@ -269,39 +275,38 @@ def get_transactions_by_bank(year: int, month: int) -> dict:
     else:
         end_date = date(year, month + 1, 1)
     
-    cursor = db.conn.cursor()
-    cursor.execute("""
-        SELECT 
-            bank_source,
-            account_id,
-            account_type,
-            COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as income,
-            COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as expenses,
-            COALESCE(SUM(amount), 0) as net,
-            COUNT(*) as count
-        FROM transactions
-        WHERE date >= %s AND date < %s
-        GROUP BY bank_source, account_id, account_type
-        ORDER BY bank_source, account_id
-    """, (start_date, end_date))
-    
-    rows = cursor.fetchall()
-    return {
-        "year": year,
-        "month": month,
-        "accounts": [
-            {
-                "bank_source": row[0],
-                "account_id": row[1],
-                "account_type": row[2],
-                "income": float(row[3]),
-                "expenses": float(row[4]),
-                "net": float(row[5]),
-                "transaction_count": row[6]
-            }
-            for row in rows
-        ]
-    }
+    with db.get_session() as session:
+        rows = session.execute(text("""
+            SELECT 
+                bank_source,
+                account_id,
+                account_type,
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as income,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as expenses,
+                COALESCE(SUM(amount), 0) as net,
+                COUNT(*) as count
+            FROM transactions
+            WHERE date >= :start_date AND date < :end_date
+            GROUP BY bank_source, account_id, account_type
+            ORDER BY bank_source, account_id
+        """), {"start_date": start_date, "end_date": end_date}).fetchall()
+        
+        return {
+            "year": year,
+            "month": month,
+            "accounts": [
+                {
+                    "bank_source": row[0],
+                    "account_id": row[1],
+                    "account_type": row[2],
+                    "income": float(row[3]),
+                    "expenses": float(row[4]),
+                    "net": float(row[5]),
+                    "transaction_count": row[6]
+                }
+                for row in rows
+            ]
+        }
 
 
 @mcp.tool()
@@ -322,91 +327,89 @@ def get_top_merchants(year: int, month: int, top_n: int = 10, exclude_internal_t
     else:
         end_date = date(year, month + 1, 1)
     
-    cursor = db.conn.cursor()
-    
-    if exclude_internal_transfers:
-        cursor.execute("""
-            WITH matched_transfer_ids AS (
-                SELECT DISTINCT t1.id
-                FROM transactions t1
-                INNER JOIN transactions t2 ON
-                    ABS(t1.amount) = ABS(t2.amount)
-                    AND t1.amount < 0
-                    AND t2.amount > 0
-                    AND ABS(t1.date - t2.date) <= 1
-                    AND t1.account_id != t2.account_id
-                WHERE t1.date >= %s AND t1.date < %s
-            ),
-            pattern_transfer_ids AS (
-                SELECT id FROM transactions
-                WHERE date >= %s AND date < %s
+    with db.get_session() as session:
+        if exclude_internal_transfers:
+            rows = session.execute(text("""
+                WITH matched_transfer_ids AS (
+                    SELECT DISTINCT t1.id
+                    FROM transactions t1
+                    INNER JOIN transactions t2 ON
+                        ABS(t1.amount) = ABS(t2.amount)
+                        AND t1.amount < 0
+                        AND t2.amount > 0
+                        AND ABS(t1.date - t2.date) <= 1
+                        AND t1.account_id != t2.account_id
+                    WHERE t1.date >= :start_date AND t1.date < :end_date
+                ),
+                pattern_transfer_ids AS (
+                    SELECT id FROM transactions
+                    WHERE date >= :start_date AND date < :end_date
+                        AND amount < 0
+                        AND (
+                            COALESCE(original_category, '') IN ('TFR', 'PAYMENT')
+                            OR COALESCE(original_category, '') LIKE 'Financial > Transfer%%'
+                            OR LOWER(description) LIKE 'transfer to%%'
+                            OR LOWER(description) LIKE 'to westpac%%'
+                            OR LOWER(description) LIKE 'to anz%%'
+                            OR LOWER(description) LIKE 'to cba%%'
+                            OR LOWER(description) LIKE 'to macquarie%%'
+                            OR LOWER(description) LIKE 'to bankwest%%'
+                            OR LOWER(description) LIKE 'to bw%%'
+                            OR LOWER(description) LIKE '%%payment by authority to westpac bankcorp%%'
+                            OR LOWER(description) LIKE '%%withdrawal online%%tfr%%'
+                            OR LOWER(description) LIKE '%%withdrawal mobile%%pymt%%'
+                            OR LOWER(description) LIKE '%%anz internet banking%%payment%%to%%'
+                            OR LOWER(description) LIKE '%%pymt interactiv%%'
+                            OR LOWER(description) LIKE '%%interactive brokers%%'
+                            OR (LOWER(original_category) = 'cash' AND ABS(amount) > 5000)
+                        )
+                ),
+                all_transfer_ids AS (
+                    SELECT id FROM matched_transfer_ids
+                    UNION
+                    SELECT id FROM pattern_transfer_ids
+                )
+                SELECT
+                    description,
+                    SUM(ABS(amount)) as total,
+                    COUNT(*) as count
+                FROM transactions
+                WHERE date >= :start_date AND date < :end_date
                     AND amount < 0
-                    AND (
-                        COALESCE(original_category, '') IN ('TFR', 'PAYMENT')
-                        OR COALESCE(original_category, '') LIKE 'Financial > Transfer%%'
-                        OR LOWER(description) LIKE 'transfer to%%'
-                        OR LOWER(description) LIKE 'to westpac%%'
-                        OR LOWER(description) LIKE 'to anz%%'
-                        OR LOWER(description) LIKE 'to cba%%'
-                        OR LOWER(description) LIKE 'to macquarie%%'
-                        OR LOWER(description) LIKE 'to bankwest%%'
-                        OR LOWER(description) LIKE 'to bw%%'
-                        OR LOWER(description) LIKE '%%payment by authority to westpac bankcorp%%'
-                        OR LOWER(description) LIKE '%%withdrawal online%%tfr%%'
-                        OR LOWER(description) LIKE '%%withdrawal mobile%%pymt%%'
-                        OR LOWER(description) LIKE '%%anz internet banking%%payment%%to%%'
-                        OR LOWER(description) LIKE '%%pymt interactiv%%'
-                        OR LOWER(description) LIKE '%%interactive brokers%%'
-                        OR (LOWER(original_category) = 'cash' AND ABS(amount) > 5000)
-                    )
-            ),
-            all_transfer_ids AS (
-                SELECT id FROM matched_transfer_ids
-                UNION
-                SELECT id FROM pattern_transfer_ids
-            )
-            SELECT
-                description,
-                SUM(ABS(amount)) as total,
-                COUNT(*) as count
-            FROM transactions
-            WHERE date >= %s AND date < %s
-                AND amount < 0
-                AND id NOT IN (SELECT id FROM all_transfer_ids)
-                AND account_type != 'loan'
-                AND COALESCE(original_category, '') != 'INT'
-                AND description != 'INTEREST'
-            GROUP BY description
-            ORDER BY total DESC
-            LIMIT %s
-        """, (start_date, end_date, start_date, end_date, start_date, end_date, top_n))
-    else:
-        cursor.execute("""
-            SELECT
-                description,
-                SUM(ABS(amount)) as total,
-                COUNT(*) as count
-            FROM transactions
-            WHERE date >= %s AND date < %s AND amount < 0
-            GROUP BY description
-            ORDER BY total DESC
-            LIMIT %s
-        """, (start_date, end_date, top_n))
-    
-    rows = cursor.fetchall()
-    return {
-        "year": year,
-        "month": month,
-        "exclude_internal_transfers": exclude_internal_transfers,
-        "top_merchants": [
-            {
-                "description": row[0],
-                "total": float(row[1]),
-                "count": row[2]
-            }
-            for row in rows
-        ]
-    }
+                    AND id NOT IN (SELECT id FROM all_transfer_ids)
+                    AND account_type != 'loan'
+                    AND COALESCE(original_category, '') != 'INT'
+                    AND description != 'INTEREST'
+                GROUP BY description
+                ORDER BY total DESC
+                LIMIT :top_n
+            """), {"start_date": start_date, "end_date": end_date, "top_n": top_n}).fetchall()
+        else:
+            rows = session.execute(text("""
+                SELECT
+                    description,
+                    SUM(ABS(amount)) as total,
+                    COUNT(*) as count
+                FROM transactions
+                WHERE date >= :start_date AND date < :end_date AND amount < 0
+                GROUP BY description
+                ORDER BY total DESC
+                LIMIT :top_n
+            """), {"start_date": start_date, "end_date": end_date, "top_n": top_n}).fetchall()
+        
+        return {
+            "year": year,
+            "month": month,
+            "exclude_internal_transfers": exclude_internal_transfers,
+            "top_merchants": [
+                {
+                    "description": row[0],
+                    "total": float(row[1]),
+                    "count": row[2]
+                }
+                for row in rows
+            ]
+        }
 
 
 @mcp.tool()
@@ -464,83 +467,78 @@ def execute_sql(query: str) -> dict:
         if keyword in query_upper:
             raise ValueError(f"Query contains forbidden keyword: {keyword}")
     
-    cursor = db.conn.cursor()
-    cursor.execute(query)
-    
-    columns = [desc[0] for desc in cursor.description]
-    rows = cursor.fetchall()
-    
-    return {
-        "columns": columns,
-        "row_count": len(rows),
-        "rows": [
-            {col: (float(val) if isinstance(val, Decimal) else val.isoformat() if isinstance(val, (date, datetime)) else val)
-             for col, val in zip(columns, row)}
-            for row in rows
-        ]
-    }
+    with db.get_session() as session:
+        result = session.execute(text(query))
+        columns = list(result.keys())
+        rows = result.fetchall()
+        
+        return {
+            "columns": columns,
+            "row_count": len(rows),
+            "rows": [
+                {col: (float(val) if isinstance(val, Decimal) else val.isoformat() if isinstance(val, (date, datetime)) else val)
+                 for col, val in zip(columns, row)}
+                for row in rows
+            ]
+        }
 
 
 @mcp.tool()
 def get_available_months() -> dict:
     """Get list of months that have transaction data."""
     db = get_db()
-    cursor = db.conn.cursor()
-    cursor.execute("""
-        SELECT 
-            EXTRACT(YEAR FROM date)::int as year,
-            EXTRACT(MONTH FROM date)::int as month,
-            COUNT(*) as count
-        FROM transactions
-        GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
-        ORDER BY year DESC, month DESC
-    """)
     
-    rows = cursor.fetchall()
-    return {
-        "months": [
-            {"year": row[0], "month": row[1], "transaction_count": row[2]}
-            for row in rows
-        ]
-    }
+    with db.get_session() as session:
+        rows = session.execute(text("""
+            SELECT 
+                EXTRACT(YEAR FROM date)::int as year,
+                EXTRACT(MONTH FROM date)::int as month,
+                COUNT(*) as count
+            FROM transactions
+            GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
+            ORDER BY year DESC, month DESC
+        """)).fetchall()
+        
+        return {
+            "months": [
+                {"year": row[0], "month": row[1], "transaction_count": row[2]}
+                for row in rows
+            ]
+        }
 
 
 @mcp.tool()
 def get_database_stats() -> dict:
     """Get overall database statistics (total transactions, date range, banks)."""
     db = get_db()
-    cursor = db.conn.cursor()
     
-    cursor.execute("SELECT COUNT(*) FROM transactions")
-    total_count = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT MIN(date), MAX(date) FROM transactions")
-    date_range = cursor.fetchone()
-    
-    cursor.execute("""
-        SELECT bank_source, COUNT(*)
-        FROM transactions
-        GROUP BY bank_source
-        ORDER BY COUNT(*) DESC
-    """)
-    banks = cursor.fetchall()
-    
-    cursor.execute("""
-        SELECT account_type, COUNT(*)
-        FROM transactions
-        GROUP BY account_type
-    """)
-    account_types = cursor.fetchall()
-    
-    return {
-        "total_transactions": total_count,
-        "date_range": {
-            "earliest": date_range[0].isoformat() if date_range[0] else None,
-            "latest": date_range[1].isoformat() if date_range[1] else None
-        },
-        "banks": [{"bank": row[0], "count": row[1]} for row in banks],
-        "account_types": [{"type": row[0], "count": row[1]} for row in account_types]
-    }
+    with db.get_session() as session:
+        total_count = session.execute(text("SELECT COUNT(*) FROM transactions")).fetchone()[0]
+        
+        date_range = session.execute(text("SELECT MIN(date), MAX(date) FROM transactions")).fetchone()
+        
+        banks = session.execute(text("""
+            SELECT bank_source, COUNT(*)
+            FROM transactions
+            GROUP BY bank_source
+            ORDER BY COUNT(*) DESC
+        """)).fetchall()
+        
+        account_types = session.execute(text("""
+            SELECT account_type, COUNT(*)
+            FROM transactions
+            GROUP BY account_type
+        """)).fetchall()
+        
+        return {
+            "total_transactions": total_count,
+            "date_range": {
+                "earliest": date_range[0].isoformat() if date_range[0] else None,
+                "latest": date_range[1].isoformat() if date_range[1] else None
+            },
+            "banks": [{"bank": row[0], "count": row[1]} for row in banks],
+            "account_types": [{"type": row[0], "count": row[1]} for row in account_types]
+        }
 
 
 @mcp.tool()
@@ -553,89 +551,82 @@ def get_table_schema(table_name: str = "transactions") -> dict:
         table_name: Name of the table to describe (default: 'transactions')
     """
     db = get_db()
-    cursor = db.conn.cursor()
     
     # Validate table name to prevent SQL injection
     allowed_tables = ["transactions"]
     if table_name not in allowed_tables:
         return {"error": f"Table '{table_name}' not found. Available tables: {allowed_tables}"}
     
-    # Get column information from PostgreSQL information_schema
-    cursor.execute("""
-        SELECT
-            column_name,
-            data_type,
-            is_nullable,
-            column_default,
-            character_maximum_length,
-            numeric_precision,
-            numeric_scale
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s
-        ORDER BY ordinal_position
-    """, (table_name,))
-    
-    columns = cursor.fetchall()
-    
-    # Get primary key information
-    cursor.execute("""
-        SELECT a.attname
-        FROM pg_index i
-        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE i.indrelid = %s::regclass AND i.indisprimary
-    """, (table_name,))
-    
-    primary_keys = [row[0] for row in cursor.fetchall()]
-    
-    # Get index information
-    cursor.execute("""
-        SELECT indexname, indexdef
-        FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = %s
-    """, (table_name,))
-    
-    indexes = cursor.fetchall()
-    
-    # Get sample distinct values for key columns (useful for filtering)
-    sample_values = {}
-    for col in ["bank_source", "account_type", "transaction_type"]:
-        cursor.execute(f"""
-            SELECT DISTINCT {col} FROM {table_name}
-            WHERE {col} IS NOT NULL
-            ORDER BY {col}
-            LIMIT 20
-        """)
-        sample_values[col] = [row[0] for row in cursor.fetchall()]
-    
-    return {
-        "table_name": table_name,
-        "columns": [
-            {
-                "name": col[0],
-                "type": col[1],
-                "nullable": col[2] == "YES",
-                "default": col[3],
-                "max_length": col[4],
-                "precision": col[5],
-                "scale": col[6],
-                "is_primary_key": col[0] in primary_keys
+    with db.get_session() as session:
+        # Get column information from PostgreSQL information_schema
+        columns = session.execute(text("""
+            SELECT
+                column_name,
+                data_type,
+                is_nullable,
+                column_default,
+                character_maximum_length,
+                numeric_precision,
+                numeric_scale
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = :table_name
+            ORDER BY ordinal_position
+        """), {"table_name": table_name}).fetchall()
+        
+        # Get primary key information
+        primary_keys = [row[0] for row in session.execute(text("""
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = :table_name::regclass AND i.indisprimary
+        """), {"table_name": table_name}).fetchall()]
+        
+        # Get index information
+        indexes = session.execute(text("""
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = :table_name
+        """), {"table_name": table_name}).fetchall()
+        
+        # Get sample distinct values for key columns (useful for filtering)
+        sample_values = {}
+        for col in ["bank_source", "account_type", "transaction_type"]:
+            sample_values[col] = [row[0] for row in session.execute(text(f"""
+                SELECT DISTINCT {col} FROM {table_name}
+                WHERE {col} IS NOT NULL
+                ORDER BY {col}
+                LIMIT 20
+            """)).fetchall()]
+        
+        return {
+            "table_name": table_name,
+            "columns": [
+                {
+                    "name": col[0],
+                    "type": col[1],
+                    "nullable": col[2] == "YES",
+                    "default": col[3],
+                    "max_length": col[4],
+                    "precision": col[5],
+                    "scale": col[6],
+                    "is_primary_key": col[0] in primary_keys
+                }
+                for col in columns
+            ],
+            "primary_keys": primary_keys,
+            "indexes": [
+                {"name": idx[0], "definition": idx[1]}
+                for idx in indexes
+            ],
+            "sample_values": sample_values,
+            "notes": {
+                "amount": "Negative values are expenses/debits, positive values are income/credits",
+                "date": "Format: YYYY-MM-DD",
+                "category": "User-assigned category (may be NULL)",
+                "original_category": "Bank-provided category (may be NULL)",
+                "transaction_type": "DEBIT, CREDIT, TRANSFER, etc."
             }
-            for col in columns
-        ],
-        "primary_keys": primary_keys,
-        "indexes": [
-            {"name": idx[0], "definition": idx[1]}
-            for idx in indexes
-        ],
-        "sample_values": sample_values,
-        "notes": {
-            "amount": "Negative values are expenses/debits, positive values are income/credits",
-            "date": "Format: YYYY-MM-DD",
-            "category": "User-assigned category (may be NULL)",
-            "original_category": "Bank-provided category (may be NULL)",
-            "transaction_type": "DEBIT, CREDIT, TRANSFER, etc."
         }
-    }
 
 
 # Run with streamable HTTP transport

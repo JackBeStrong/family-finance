@@ -3,7 +3,10 @@
 # MCP SDK for Python (1.2+ for Streamable HTTP transport)
 mcp[cli]>=1.2.0
 
-# PostgreSQL driver
+# Database ORM with connection pooling
+sqlalchemy>=2.0.0
+
+# PostgreSQL driver (used by SQLAlchemy)
 psycopg2-binary>=2.9.0
 
 # YAML parsing for context store

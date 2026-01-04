@@ -1,6 +1,9 @@
 # Family Finance - Bank Statement Parser
 
-# PostgreSQL support
+# Database ORM with connection pooling
+sqlalchemy>=2.0.0
+
+# PostgreSQL driver (used by SQLAlchemy)
 psycopg2-binary>=2.9.0
 
 # Optional: For better file watching (inotify)
