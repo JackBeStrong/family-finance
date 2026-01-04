@@ -4,6 +4,125 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2026-01-04 18:10:00 AEDT] - SQLAlchemy Migration for Database Access
+
+### Decision
+Migrated from raw psycopg2 cursors to SQLAlchemy ORM with connection pooling for all database access in both the PostgreSQL repository and MCP server.
+
+### Context
+- MCP server was experiencing "current transaction is aborted, commands ignored until end of transaction block" errors
+- Raw psycopg2 cursors were never being closed, causing resource leaks
+- No automatic transaction rollback on errors - queries would fail and leave connection in aborted state
+- No connection pooling - stale connections would accumulate
+- Manual SQL string building was error-prone
+
+### Problem Analysis
+The root cause was **low-level database access without proper lifecycle management**:
+
+1. **Cursor Leaks**: 21+ instances of `cursor = db.conn.cursor()` without `cursor.close()`
+2. **No Auto-Rollback**: When any query failed, PostgreSQL marked the transaction as aborted, but the code had no automatic rollback
+3. **Stale Connections**: Single connection reused indefinitely, no health checks or recycling
+4. **Manual Error Handling**: Each query needed try/except with manual rollback - easy to forget
+
+### Rationale
+**Why SQLAlchemy over raw psycopg2?**
+- **Connection Pooling**: Automatically maintains pool of healthy connections with pre-ping health checks
+- **Session Management**: Context managers (`with session:`) provide automatic commit/rollback
+- **Connection Recycling**: Connections recycled after 1 hour to prevent "server closed connection" errors
+- **Industry Standard**: Used by Django ORM, Flask-SQLAlchemy, FastAPI SQLModel
+- **Hybrid Approach**: Can use ORM for simple queries, raw SQL via `text()` for complex aggregations
+
+**Why not other solutions?**
+- **Just add autocommit**: Would prevent transactions entirely, losing ACID guarantees
+- **Manual try/except everywhere**: Error-prone, doesn't solve connection pooling
+- **Keep raw psycopg2**: Would require manually implementing connection pool, health checks, etc.
+
+### Implementation
+
+**1. Created SQLAlchemy Models** ([`src/database/models.py`](src/database/models.py)):
+```python
+from sqlalchemy import Column, String, Date, Numeric, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+class TransactionModel(Base):
+    __tablename__ = 'transactions'
+    id = Column(String, primary_key=True)
+    date = Column(Date, nullable=False, index=True)
+    amount = Column(Numeric(15, 2), nullable=False)
+    # ... more fields
+```
+
+**2. Added Connection Pooling** ([`src/database/models.py`](src/database/models.py:82)):
+```python
+engine = create_engine(
+    url,
+    pool_pre_ping=True,      # Test connections before use (prevents stale connections)
+    pool_recycle=3600,       # Recycle connections after 1 hour
+    pool_size=5,             # Maintain 5 connections in pool
+    max_overflow=10,         # Allow up to 15 total connections under load
+)
+```
+
+**3. Migrated PostgreSQL Repository** ([`src/database/postgres_repository.py`](src/database/postgres_repository.py)):
+- Added `get_session()` context manager for automatic commit/rollback
+- Migrated CRUD operations to use SQLAlchemy sessions
+- Kept repository interface unchanged (no breaking changes to callers)
+
+**4. Migrated MCP Server** ([`src/mcp_server/server.py`](src/mcp_server/server.py)):
+- **Hybrid approach**: Use `session.execute(text(query))` for complex SQL
+- Keeps existing SQL queries (less risk of bugs from ORM translation)
+- Gets benefits of connection pooling and auto-rollback
+- All 13 MCP tools updated
+
+### Key Changes
+
+**Before (raw psycopg2)**:
+```python
+cursor = db.conn.cursor()
+cursor.execute("SELECT COUNT(*) FROM transactions")
+result = cursor.fetchone()  # Cursor never closed!
+# If error occurs, transaction stays aborted
+```
+
+**After (SQLAlchemy)**:
+```python
+with db.get_session() as session:
+    result = session.execute(text("SELECT COUNT(*) FROM transactions")).fetchone()
+    # Auto-commit on exit, auto-rollback on exception
+```
+
+### Connection Pool Configuration
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `pool_size` | 5 | Baseline connections maintained |
+| `max_overflow` | 10 | Additional connections under load (max 15 total) |
+| `pool_pre_ping` | True | Test connection before use (prevents stale connections) |
+| `pool_recycle` | 3600s | Recycle connections after 1 hour |
+
+### Deployment & Testing
+- **Deployed**: 2026-01-04 18:00 AEDT
+- **Tested**: All 13 MCP tools verified working
+  - `get_database_stats()` - 817 transactions ✓
+  - `get_monthly_summary(2025, 12)` - $79,077 income, $77,380 expenses ✓
+  - `execute_sql()` - No more "aborted transaction" errors ✓
+  - `get_spending_by_category()` - Complex aggregation working ✓
+
+### Implications
+- **Immediate**: No more "aborted transaction" errors in MCP server
+- **Performance**: Connection pooling reduces connection overhead
+- **Reliability**: Automatic rollback prevents stuck transactions
+- **Maintainability**: Context managers make error handling automatic
+- **Future**: Easy to add read replicas, connection load balancing
+
+### References
+- SQLAlchemy connection pooling docs: https://docs.sqlalchemy.org/en/20/core/pooling.html
+- Industry comparison: Django ORM, SQLModel, Peewee all use similar patterns
+
+---
+
 ## [2026-01-03 10:43:00 AEDT] - MCP Transport Migration: SSE to Streamable HTTP
 
 ### Decision

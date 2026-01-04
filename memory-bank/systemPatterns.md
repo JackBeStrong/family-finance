@@ -117,21 +117,62 @@ ParserFactory.register(NewBankParser)
 
 ## Database Architecture
 
-### Repository Pattern
+### Repository Pattern with SQLAlchemy
 
 ```
 src/database/
-├── __init__.py           # get_repository() factory function
-├── repository.py         # TransactionRepository ABC
-├── sqlite_repository.py  # SQLite implementation (local dev)
-└── postgres_repository.py # PostgreSQL implementation (production)
+├── __init__.py              # get_repository() factory function
+├── repository.py            # TransactionRepository ABC
+├── models.py                # SQLAlchemy ORM models and engine factory
+├── sqlite_repository.py     # SQLite implementation (local dev)
+└── postgres_repository.py   # PostgreSQL with SQLAlchemy (production)
 ```
 
 ### Database Selection
 
 The system uses `DB_TYPE` environment variable to select backend:
 - `DB_TYPE=sqlite` (default) - Uses local SQLite file
-- `DB_TYPE=postgres` - Uses PostgreSQL with connection from env vars
+- `DB_TYPE=postgres` - Uses PostgreSQL with SQLAlchemy connection pooling
+
+### SQLAlchemy Connection Pooling (Added 2026-01-04)
+
+**Why SQLAlchemy?**
+- Prevents "current transaction is aborted" errors via automatic rollback
+- Connection pooling with health checks (pool_pre_ping)
+- Connection recycling to prevent stale connections
+- Session lifecycle management via context managers
+
+**Configuration** ([`src/database/models.py`](src/database/models.py:82)):
+```python
+engine = create_engine(
+    url,
+    pool_pre_ping=True,      # Test connections before use
+    pool_recycle=3600,       # Recycle after 1 hour
+    pool_size=5,             # Maintain 5 connections
+    max_overflow=10,         # Allow up to 15 total
+)
+```
+
+**Usage Pattern** ([`src/database/postgres_repository.py`](src/database/postgres_repository.py:92)):
+```python
+@contextmanager
+def get_session(self):
+    """Auto-commit on success, auto-rollback on error."""
+    session = self.SessionFactory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+# Usage
+with repo.get_session() as session:
+    result = session.execute(text("SELECT COUNT(*) FROM transactions"))
+    # Automatic commit/rollback
+```
 
 ### PostgreSQL Schema
 
@@ -159,10 +200,12 @@ CREATE TABLE transactions (
 
 ### Database Users
 
-| User | Purpose | Permissions |
-|------|---------|-------------|
-| `readwrite` | File watcher service | ALL on transactions table |
-| `readonly` | Reporting services | SELECT only |
+| User | Purpose | Permissions | Connection Pool |
+|------|---------|-------------|-----------------|
+| `readwrite` | File watcher service | ALL on transactions table | SQLAlchemy (pool_size=5) |
+| `readonly` | MCP server, reporting | SELECT only | SQLAlchemy (pool_size=5) |
+
+**Note**: Each service maintains its own connection pool. The MCP server and file watcher do not share connections.
 
 ---
 
@@ -397,9 +440,105 @@ mcp:
 - mcp-agent uses `streamable_http` (underscore), Roo uses `streamable-http` (hyphen)
 - `stateless_http=True` recommended for production scalability
 
+## Database Access Pattern: SQLAlchemy with Hybrid Queries
+
+### Pattern Overview
+
+The system uses a **hybrid approach** combining SQLAlchemy ORM with raw SQL:
+- SQLAlchemy for connection management, pooling, and session lifecycle
+- Raw SQL via `text()` for complex queries (aggregations, CTEs)
+- ORM for simple CRUD operations
+
+### Why Hybrid?
+
+| Aspect | Pure ORM | Hybrid (Our Approach) | Raw SQL |
+|--------|----------|----------------------|---------|
+| Complex queries | Verbose, hard to read | Clean SQL with pooling benefits | Risk of SQL injection |
+| Connection pooling | ✓ Yes | ✓ Yes | ✗ Manual implementation |
+| Auto-rollback | ✓ Yes | ✓ Yes | ✗ Manual try/except |
+| Type safety | ✓ Yes | ~ Partial | ✗ No |
+| Performance | ~ Good | ✓ Excellent | ✓ Excellent |
+
+### MCP Server Pattern
+
+**All MCP tools use sessions with raw SQL** ([`src/mcp_server/server.py`](src/mcp_server/server.py)):
+
+```python
+@mcp.tool()
+def get_monthly_summary(year: int, month: int) -> dict:
+    db = get_db()
+    
+    with db.get_session() as session:
+        result = session.execute(text("""
+            SELECT
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_expenses
+            FROM transactions
+            WHERE date >= :start_date AND date < :end_date
+        """), {"start_date": start_date, "end_date": end_date}).fetchone()
+        
+        return {
+            "total_income": float(result[0]),
+            "total_expenses": float(result[1])
+        }
+```
+
+**Benefits**:
+1. Existing SQL queries preserved (low migration risk)
+2. Automatic connection pooling and health checks
+3. Automatic rollback on any error
+4. Named parameters (`:start_date`) prevent SQL injection
+
+### Repository Pattern
+
+**CRUD operations use ORM** ([`src/database/postgres_repository.py`](src/database/postgres_repository.py)):
+
+```python
+def save_transaction(self, transaction: Transaction) -> bool:
+    with self.get_session() as session:
+        try:
+            txn_model = TransactionModel(id=transaction.id, ...)
+            session.add(txn_model)
+            session.flush()
+            return True
+        except IntegrityError:
+            return False  # Duplicate
+```
+
+**Queries use ORM QueryBuilder**:
+
+```python
+def get_transactions(self, start_date, end_date, bank_source, limit):
+    with self.get_session() as session:
+        query = session.query(TransactionModel)
+        if start_date:
+            query = query.filter(TransactionModel.date >= start_date)
+        if bank_source:
+            query = query.filter(TransactionModel.bank_source == bank_source)
+        return query.limit(limit).all()
+```
+
+### Migration Path (2026-01-04)
+
+**Before**: Raw psycopg2 with manual cursor management
+```python
+cursor = db.conn.cursor()
+cursor.execute("SELECT COUNT(*) FROM transactions")
+result = cursor.fetchone()
+# Problem: cursor never closed, no auto-rollback
+```
+
+**After**: SQLAlchemy with session context manager
+```python
+with db.get_session() as session:
+    result = session.execute(text("SELECT COUNT(*) FROM transactions")).fetchone()
+    # Auto-commit on exit, auto-rollback on exception
+```
+
 ---
 
 [2025-12-29 14:44:00 AEDT] - Initial parser architecture documented
 [2025-12-29 18:15:00 AEDT] - Added deployment architecture and PostgreSQL patterns
 [2025-12-30 20:20:00 AEDT] - Added Financial Context Store pattern
 [2026-01-03 10:44:00 AEDT] - Added MCP Server Transport Pattern (Streamable HTTP)
+[2026-01-04 18:10:00 AEDT] - Added SQLAlchemy Database Access Pattern with connection pooling

@@ -165,6 +165,11 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2026-01-03 13:02:00 AEDT] - **Schema Discovery Tool**: Added `get_table_schema` MCP tool for SQL query building
 * [2026-01-03 13:02:00 AEDT] - Returns column names, types, nullability, primary keys, indexes, and sample values
 * [2026-01-03 13:02:00 AEDT] - Helps callers understand table structure before using `execute_sql`
+* [2026-01-04 18:10:00 AEDT] - **SQLAlchemy Migration**: Migrated from raw psycopg2 to SQLAlchemy with connection pooling
+* [2026-01-04 18:10:00 AEDT] - Fixed "current transaction is aborted" errors via automatic rollback
+* [2026-01-04 18:10:00 AEDT] - Added connection pooling (pool_size=5, max_overflow=10, pool_pre_ping=True)
+* [2026-01-04 18:10:00 AEDT] - Hybrid approach: SQLAlchemy sessions with raw SQL via text() for complex queries
+* [2026-01-04 18:10:00 AEDT] - All 13 MCP tools verified working after deployment
 
 ## Key Files
 

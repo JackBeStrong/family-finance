@@ -1,5 +1,7 @@
 # Progress
 
+[2026-01-04 18:10:00 AEDT] - **SQLAlchemy Migration Complete**: Migrated from raw psycopg2 to SQLAlchemy with connection pooling, fixing "aborted transaction" errors
+
 [2025-12-31 19:37:00 AEDT] - Added fail-safe lock mechanism to Westpac scraper to prevent account lockouts from repeated failed login attempts
 
 This file tracks the project's progress using a task list format.
@@ -271,3 +273,29 @@ Realized Gains: +$4,453.93 USD from AMZN trade
 * [ ] Goal-based savings plans
 * [ ] Long-term financial projections
 * [ ] Portfolio performance over time (weekly/monthly/yearly returns)
+
+## Phase 8: Database Architecture Improvement ✓ COMPLETE
+
+### SQLAlchemy Migration (2026-01-04)
+* [2026-01-04 18:00:00 AEDT] - Identified root cause of "aborted transaction" errors
+* [2026-01-04 18:00:00 AEDT] - Created [`src/database/models.py`](src/database/models.py) with SQLAlchemy ORM models
+* [2026-01-04 18:00:00 AEDT] - Migrated [`src/database/postgres_repository.py`](src/database/postgres_repository.py) to use SQLAlchemy sessions
+* [2026-01-04 18:00:00 AEDT] - Migrated [`src/mcp_server/server.py`](src/mcp_server/server.py) to use session context managers
+* [2026-01-04 18:00:00 AEDT] - Added connection pooling: pool_size=5, max_overflow=10, pool_pre_ping=True
+* [2026-01-04 18:00:00 AEDT] - Updated [`requirements.txt`](requirements.txt) and [`requirements-mcp.txt`](requirements-mcp.txt) to include sqlalchemy>=2.0.0
+* [2026-01-04 18:00:00 AEDT] - Deployed to production (LXC 128)
+* [2026-01-04 18:10:00 AEDT] - Verified all 13 MCP tools working correctly
+
+### Key Improvements
+- **No more "aborted transaction" errors**: Automatic rollback on query failures
+- **Connection pooling**: Health checks (pool_pre_ping) prevent stale connections
+- **Connection recycling**: Connections recycled after 1 hour
+- **Hybrid approach**: SQLAlchemy for lifecycle, raw SQL for complex queries
+- **Zero breaking changes**: Repository interface unchanged
+
+### Testing Results
+- ✓ `get_database_stats()` - 817 transactions
+- ✓ `get_monthly_summary(2025, 12)` - $79,077 income, $77,380 expenses
+- ✓ `execute_sql()` - No "aborted transaction" errors
+- ✓ `get_spending_by_category()` - Complex aggregations working
+- ✓ All 13 MCP tools verified working
