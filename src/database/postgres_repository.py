@@ -29,9 +29,10 @@ from src.parsers.base import Transaction, TransactionType, AccountType
 from src.database.repository import TransactionRepository
 
 try:
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine, text, insert
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
     from src.database.models import TransactionModel, get_engine, get_session_factory
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -124,50 +125,42 @@ class PostgresRepository(TransactionRepository):
         """
         Save a single transaction. Returns False if duplicate.
         
-        Uses SQLAlchemy session with automatic rollback on error.
+        Uses PostgreSQL's ON CONFLICT DO NOTHING to handle duplicates gracefully.
         """
         with self.get_session() as session:
-            try:
-                # Convert Transaction to TransactionModel
-                txn_model = TransactionModel(
-                    id=transaction.id,
-                    date=transaction.date,
-                    amount=transaction.amount,
-                    description=transaction.description,
-                    account_id=transaction.account_id,
-                    account_type=transaction.account_type.value,
-                    bank_source=transaction.bank_source,
-                    source_file=transaction.source_file,
-                    balance=transaction.balance,
-                    original_category=transaction.original_category,
-                    category=transaction.category,
-                    transaction_type=transaction.transaction_type.value,
-                    merchant_name=transaction.merchant_name,
-                    location=transaction.location,
-                    foreign_amount=transaction.foreign_amount,
-                    foreign_currency=transaction.foreign_currency,
-                    created_at=transaction.created_at,
-                )
-                
-                session.add(txn_model)
-                session.flush()  # Flush to catch IntegrityError
-                
-                if verbose:
+            # Use PostgreSQL's INSERT ... ON CONFLICT DO NOTHING
+            stmt = pg_insert(TransactionModel).values(
+                id=transaction.id,
+                date=transaction.date,
+                amount=transaction.amount,
+                description=transaction.description,
+                account_id=transaction.account_id,
+                account_type=transaction.account_type.value,
+                bank_source=transaction.bank_source,
+                source_file=transaction.source_file,
+                balance=transaction.balance,
+                original_category=transaction.original_category,
+                category=transaction.category,
+                transaction_type=transaction.transaction_type.value,
+                merchant_name=transaction.merchant_name,
+                location=transaction.location,
+                foreign_amount=transaction.foreign_amount,
+                foreign_currency=transaction.foreign_currency,
+                created_at=transaction.created_at,
+            ).on_conflict_do_nothing(index_elements=['id'])
+            
+            result = session.execute(stmt)
+            
+            # Check if row was inserted (rowcount > 0) or skipped (rowcount == 0)
+            was_inserted = result.rowcount > 0
+            
+            if verbose:
+                if was_inserted:
                     print(f"    [SAVED] {transaction.id}")
-                return True
-                
-            except IntegrityError:
-                # Duplicate transaction (primary key conflict)
-                if verbose:
+                else:
                     print(f"    [SKIP] {transaction.id} - duplicate")
-                return False
-                
-            except Exception as e:
-                # Other errors - log and return False
-                logger.error(f"Failed to save transaction {transaction.id}: {e}")
-                if verbose:
-                    print(f"    [ERROR] {transaction.id} - {e}")
-                return False
+            
+            return was_inserted
     
     def save_transactions(self, transactions: List[Transaction], verbose: bool = False) -> Tuple[int, int]:
         """Save multiple transactions. Returns (saved_count, skipped_count)."""
