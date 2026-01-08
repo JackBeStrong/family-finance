@@ -101,8 +101,7 @@ async def oauth_authorization_server_metadata(request):
             "profile",
             "email",
             "groups",
-            "offline_access",
-            "authelia.bearer.authz"
+            "offline_access"
         ],
         "response_types_supported": [
             "code",
@@ -170,7 +169,7 @@ async def oauth_authorization_server_metadata(request):
         "request_uri_parameter_supported": True,
         "require_request_uri_registration": False,
         "pushed_authorization_request_endpoint": f"{issuer}/api/oidc/par",
-        "require_pushed_authorization_requests": True
+        "require_pushed_authorization_requests": False
     }
     
     return JSONResponse(content=metadata, headers={
