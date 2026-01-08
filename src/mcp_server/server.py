@@ -27,6 +27,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy import text
+from starlette.responses import JSONResponse
 
 # Database imports - reuse existing repository
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -68,6 +69,126 @@ def get_context_store() -> FinancialContextStore:
 # Create the FastMCP server
 # Configure host to 0.0.0.0 for external access in Docker
 mcp = FastMCP("family-finance-mcp", stateless_http=True, host="0.0.0.0", port=8000)
+
+
+# ==========================================
+# OAUTH 2.0 / OIDC WELL-KNOWN ENDPOINTS
+# ==========================================
+
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+async def oauth_authorization_server_metadata():
+    """
+    OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
+    
+    This endpoint advertises that the MCP server uses Authelia for OAuth 2.0 authentication.
+    Claude.ai and other OAuth clients will query this endpoint to discover the authorization
+    server configuration.
+    
+    The actual OAuth endpoints are hosted by Authelia at auth.jackan.xyz.
+    """
+    # Get the issuer URL from environment or use default
+    issuer = os.getenv("OAUTH_ISSUER", "https://auth.jackan.xyz")
+    
+    metadata = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/api/oidc/authorization",
+        "token_endpoint": f"{issuer}/api/oidc/token",
+        "userinfo_endpoint": f"{issuer}/api/oidc/userinfo",
+        "jwks_uri": f"{issuer}/jwks.json",
+        "registration_endpoint": None,  # Authelia doesn't support dynamic registration
+        "scopes_supported": [
+            "openid",
+            "profile",
+            "email",
+            "groups",
+            "offline_access",
+            "authelia.bearer.authz"
+        ],
+        "response_types_supported": [
+            "code",
+            "code id_token",
+            "id_token",
+            "token id_token"
+        ],
+        "response_modes_supported": [
+            "form_post",
+            "query",
+            "fragment"
+        ],
+        "grant_types_supported": [
+            "authorization_code",
+            "refresh_token"
+        ],
+        "token_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "client_secret_post",
+            "client_secret_jwt",
+            "private_key_jwt"
+        ],
+        "token_endpoint_auth_signing_alg_values_supported": [
+            "RS256",
+            "ES256",
+            "HS256"
+        ],
+        "revocation_endpoint": f"{issuer}/api/oidc/revocation",
+        "revocation_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "client_secret_post"
+        ],
+        "introspection_endpoint": f"{issuer}/api/oidc/introspection",
+        "introspection_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "client_secret_post"
+        ],
+        "code_challenge_methods_supported": [
+            "S256",
+            "plain"
+        ],
+        "subject_types_supported": [
+            "public"
+        ],
+        "id_token_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "claim_types_supported": [
+            "normal"
+        ],
+        "claims_supported": [
+            "sub",
+            "aud",
+            "exp",
+            "iat",
+            "iss",
+            "jti",
+            "name",
+            "email",
+            "email_verified",
+            "groups",
+            "preferred_username"
+        ],
+        "request_parameter_supported": False,
+        "request_uri_parameter_supported": True,
+        "require_request_uri_registration": False,
+        "pushed_authorization_request_endpoint": f"{issuer}/api/oidc/par",
+        "require_pushed_authorization_requests": True
+    }
+    
+    return JSONResponse(content=metadata, headers={
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=3600"
+    })
+
+
+@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
+async def openid_configuration():
+    """
+    OpenID Connect Discovery endpoint (OIDC Core 1.0).
+    
+    This is an alias to the OAuth 2.0 authorization server metadata endpoint,
+    as both standards define similar discovery mechanisms.
+    """
+    return await oauth_authorization_server_metadata()
 
 
 # ==========================================
