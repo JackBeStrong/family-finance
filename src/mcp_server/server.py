@@ -76,7 +76,7 @@ mcp = FastMCP("family-finance-mcp", stateless_http=True, host="0.0.0.0", port=80
 # ==========================================
 
 @mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
-async def oauth_authorization_server_metadata():
+async def oauth_authorization_server_metadata(request):
     """
     OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
     
@@ -181,14 +181,14 @@ async def oauth_authorization_server_metadata():
 
 
 @mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
-async def openid_configuration():
+async def openid_configuration(request):
     """
     OpenID Connect Discovery endpoint (OIDC Core 1.0).
     
     This is an alias to the OAuth 2.0 authorization server metadata endpoint,
     as both standards define similar discovery mechanisms.
     """
-    return await oauth_authorization_server_metadata()
+    return await oauth_authorization_server_metadata(request)
 
 
 # ==========================================
