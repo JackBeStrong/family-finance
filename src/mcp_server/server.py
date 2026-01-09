@@ -97,8 +97,10 @@ async def oauth_authorization_server_metadata(request):
         "jwks_uri": f"{issuer}/jwks.json",
         "registration_endpoint": None,  # Authelia doesn't support dynamic registration
         "scopes_supported": [
-            "offline_access",
-            "authelia.bearer.authz"
+            "openid",
+            "profile",
+            "email",
+            "offline_access"
         ],
         "response_types_supported": [
             "code",
