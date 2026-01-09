@@ -11,6 +11,8 @@ Environment Variables:
     SCREENSHOT_DIR: Directory for screenshots (default: data/scraper_state/screenshots)
     DOWNLOAD_DIR: Directory for downloaded files (default: incoming/westpac-homeloan-offset)
     LOCK_DIR: Directory for lock files (default: data/scraper_state)
+    RANDOM_DELAY: Set to "true" to enable random delay before scraping (default: false)
+    MAX_DELAY_HOURS: Maximum hours to delay when RANDOM_DELAY is enabled (default: 24)
 
 What it does:
 1. Opens browser (headless by default for automation)
@@ -26,12 +28,19 @@ Fail-Safe Mechanism:
 - This prevents account lockouts from repeated failed login attempts
 - To resume: manually delete the lock file after debugging
   Lock file location: data/scraper_state/westpac.lock
+- Note: Lock file persists across container restarts but is cleared on LXC redeployment
+
+Random Delay Feature:
+- When RANDOM_DELAY=true, the scraper waits a random time before executing
+- This spreads scraping throughout the day to avoid predictable patterns
+- Cron triggers at a random time, then scraper adds additional randomization
 """
 
 import argparse
 import asyncio
 import logging
 import os
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -326,6 +335,20 @@ async def scrape_westpac(headless: bool = True, slow_mo: int = 0) -> bool:
 async def main():
     """Main entry point."""
     args = parse_args()
+    
+    # Add random delay if RANDOM_DELAY environment variable is set
+    random_delay_enabled = os.getenv("RANDOM_DELAY", "false").lower() == "true"
+    if random_delay_enabled:
+        # Random delay between 0 and MAX_DELAY_HOURS (default: 12 hours)
+        # This adds unpredictability to scraping time
+        max_delay_hours = int(os.getenv("MAX_DELAY_HOURS", "12"))
+        max_delay_seconds = max_delay_hours * 3600
+        delay_seconds = random.randint(0, max_delay_seconds)
+        delay_hours = delay_seconds / 3600
+        delay_minutes = (delay_seconds % 3600) / 60
+        logger.info(f"Random delay enabled: waiting {int(delay_hours)}h {int(delay_minutes)}m ({delay_seconds}s) before running...")
+        await asyncio.sleep(delay_seconds)
+        logger.info("Random delay complete, starting scraper...")
     
     # Check for lock file FIRST - refuse to run if locked
     if is_locked():
