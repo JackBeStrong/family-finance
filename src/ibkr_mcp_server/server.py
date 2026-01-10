@@ -139,6 +139,177 @@ mcp = FastMCP("interactive-brokers-mcp", stateless_http=True, host="0.0.0.0", po
 
 
 # ==========================================
+# OAUTH 2.0 / OIDC WELL-KNOWN ENDPOINTS
+# ==========================================
+
+from starlette.responses import JSONResponse
+
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+async def oauth_authorization_server_metadata(request):
+    """
+    OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
+    
+    This endpoint advertises that the MCP server uses Zitadel for OAuth 2.0 authentication.
+    Claude.ai and other OAuth clients will query this endpoint to discover the authorization
+    server configuration.
+    
+    The actual OAuth endpoints are hosted by Zitadel at auth.jackan.xyz.
+    """
+    # Get the issuer URL from environment or use default (Zitadel)
+    issuer = os.getenv("OAUTH_ISSUER", "https://auth.jackan.xyz")
+    
+    metadata = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/oauth/v2/authorize",
+        "token_endpoint": f"{issuer}/oauth/v2/token",
+        "introspection_endpoint": f"{issuer}/oauth/v2/introspect",
+        "userinfo_endpoint": f"{issuer}/oidc/v1/userinfo",
+        "revocation_endpoint": f"{issuer}/oauth/v2/revoke",
+        "end_session_endpoint": f"{issuer}/oidc/v1/end_session",
+        "device_authorization_endpoint": f"{issuer}/oauth/v2/device_authorization",
+        "jwks_uri": f"{issuer}/oauth/v2/keys",
+        "registration_endpoint": None,
+        "scopes_supported": [
+            "openid",
+            "profile",
+            "email",
+            "phone",
+            "address",
+            "offline_access"
+        ],
+        "response_types_supported": [
+            "code",
+            "id_token",
+            "id_token token"
+        ],
+        "response_modes_supported": [
+            "query",
+            "fragment",
+            "form_post"
+        ],
+        "grant_types_supported": [
+            "authorization_code",
+            "implicit",
+            "refresh_token",
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "urn:ietf:params:oauth:grant-type:device_code"
+        ],
+        "subject_types_supported": [
+            "public"
+        ],
+        "id_token_signing_alg_values_supported": [
+            "EdDSA",
+            "RS256",
+            "RS384",
+            "RS512",
+            "ES256",
+            "ES384",
+            "ES512"
+        ],
+        "request_object_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "token_endpoint_auth_methods_supported": [
+            "none",
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ],
+        "token_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "revocation_endpoint_auth_methods_supported": [
+            "none",
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ],
+        "revocation_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "introspection_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "private_key_jwt"
+        ],
+        "introspection_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "claims_supported": [
+            "sub",
+            "aud",
+            "exp",
+            "iat",
+            "iss",
+            "auth_time",
+            "nonce",
+            "acr",
+            "amr",
+            "c_hash",
+            "at_hash",
+            "act",
+            "scopes",
+            "client_id",
+            "azp",
+            "preferred_username",
+            "name",
+            "family_name",
+            "given_name",
+            "locale",
+            "email",
+            "email_verified",
+            "phone_number",
+            "phone_number_verified"
+        ],
+        "code_challenge_methods_supported": [
+            "S256"
+        ],
+        "ui_locales_supported": [
+            "bg",
+            "cs",
+            "de",
+            "en",
+            "es",
+            "fr",
+            "hu",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "mk",
+            "nl",
+            "pl",
+            "pt",
+            "ro",
+            "ru",
+            "sv",
+            "tr",
+            "uk",
+            "zh"
+        ],
+        "request_parameter_supported": True,
+        "request_uri_parameter_supported": False
+    }
+    
+    return JSONResponse(content=metadata, headers={
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=3600"
+    })
+
+
+@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
+async def openid_configuration(request):
+    """
+    OpenID Connect Discovery endpoint (OIDC Core 1.0).
+    
+    This is an alias to the OAuth 2.0 authorization server metadata endpoint,
+    as both standards define similar discovery mechanisms.
+    """
+    return await oauth_authorization_server_metadata(request)
+
+
+# ==========================================
 # INTERACTIVE BROKERS TOOLS
 # ==========================================
 

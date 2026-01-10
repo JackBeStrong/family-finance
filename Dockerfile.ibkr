@@ -1,0 +1,38 @@
+# Interactive Brokers MCP Server
+# Exposes Interactive Brokers Flex Query data via Model Context Protocol (MCP)
+# Uses Streamable HTTP transport (modern MCP protocol)
+#
+# Build:
+#   docker build -f Dockerfile.ibkr -t family-finance-ibkr .
+#
+# Run:
+#   docker run -d --name family-finance-ibkr \
+#     -p 8001:8001 \
+#     -e IB_FLEX_TOKEN=your_token_here \
+#     family-finance-ibkr
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install Node.js (required for npx interactive-brokers-mcp)
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+# Note: Ansible playbook renames requirements-mcp.txt to requirements.txt before build
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY src/ ./src/
+
+# Expose IB MCP server port
+EXPOSE 8001
+
+# Run IB MCP server with Streamable HTTP transport
+CMD ["python", "-m", "src.ibkr_mcp_server.server"]
