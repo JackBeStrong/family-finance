@@ -105,6 +105,8 @@ def _send_jsonrpc(method: str, params: dict = None) -> dict:
 
 def _initialize_mcp():
     """Initialize the MCP connection with the IB process."""
+    global _request_id_counter
+    
     try:
         result = _send_jsonrpc("initialize", {
             "protocolVersion": "2024-11-05",
@@ -116,8 +118,17 @@ def _initialize_mcp():
         })
         logger.info(f"IB MCP initialized: {result.get('serverInfo', {}).get('name', 'unknown')}")
         
-        # Send initialized notification
-        _send_jsonrpc("notifications/initialized", {})
+        # Send initialized notification (no ID, no response expected)
+        process = _ib_process
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {}
+        }
+        notification_json = json.dumps(notification) + "\n"
+        logger.debug(f"→ IB MCP (notification): {notification_json.strip()}")
+        process.stdin.write(notification_json)
+        process.stdin.flush()
         
     except Exception as e:
         logger.error(f"Failed to initialize IB MCP: {e}")
