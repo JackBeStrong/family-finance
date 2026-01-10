@@ -80,74 +80,91 @@ async def oauth_authorization_server_metadata(request):
     """
     OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
     
-    This endpoint advertises that the MCP server uses Authelia for OAuth 2.0 authentication.
+    This endpoint advertises that the MCP server uses Zitadel for OAuth 2.0 authentication.
     Claude.ai and other OAuth clients will query this endpoint to discover the authorization
     server configuration.
     
-    The actual OAuth endpoints are hosted by Authelia at auth.jackan.xyz.
+    The actual OAuth endpoints are hosted by Zitadel at auth.jackan.xyz.
     """
-    # Get the issuer URL from environment or use default
+    # Get the issuer URL from environment or use default (Zitadel)
     issuer = os.getenv("OAUTH_ISSUER", "https://auth.jackan.xyz")
     
     metadata = {
         "issuer": issuer,
-        "authorization_endpoint": f"{issuer}/api/oidc/authorization",
-        "token_endpoint": f"{issuer}/api/oidc/token",
-        "userinfo_endpoint": f"{issuer}/api/oidc/userinfo",
-        "jwks_uri": f"{issuer}/jwks.json",
-        "registration_endpoint": None,  # Authelia doesn't support dynamic registration
+        "authorization_endpoint": f"{issuer}/oauth/v2/authorize",
+        "token_endpoint": f"{issuer}/oauth/v2/token",
+        "introspection_endpoint": f"{issuer}/oauth/v2/introspect",
+        "userinfo_endpoint": f"{issuer}/oidc/v1/userinfo",
+        "revocation_endpoint": f"{issuer}/oauth/v2/revoke",
+        "end_session_endpoint": f"{issuer}/oidc/v1/end_session",
+        "device_authorization_endpoint": f"{issuer}/oauth/v2/device_authorization",
+        "jwks_uri": f"{issuer}/oauth/v2/keys",
+        "registration_endpoint": None,  # Zitadel doesn't support dynamic registration
         "scopes_supported": [
-            "offline_access",
-            "authelia.bearer.authz"
+            "openid",
+            "profile",
+            "email",
+            "phone",
+            "address",
+            "offline_access"
         ],
         "response_types_supported": [
             "code",
-            "code id_token",
             "id_token",
-            "token id_token"
+            "id_token token"
         ],
         "response_modes_supported": [
-            "form_post",
             "query",
-            "fragment"
+            "fragment",
+            "form_post"
         ],
         "grant_types_supported": [
             "authorization_code",
-            "refresh_token"
-        ],
-        "token_endpoint_auth_methods_supported": [
-            "client_secret_basic",
-            "client_secret_post",
-            "client_secret_jwt",
-            "private_key_jwt"
-        ],
-        "token_endpoint_auth_signing_alg_values_supported": [
-            "RS256",
-            "ES256",
-            "HS256"
-        ],
-        "revocation_endpoint": f"{issuer}/api/oidc/revocation",
-        "revocation_endpoint_auth_methods_supported": [
-            "client_secret_basic",
-            "client_secret_post"
-        ],
-        "introspection_endpoint": f"{issuer}/api/oidc/introspection",
-        "introspection_endpoint_auth_methods_supported": [
-            "client_secret_basic",
-            "client_secret_post"
-        ],
-        "code_challenge_methods_supported": [
-            "S256",
-            "plain"
+            "implicit",
+            "refresh_token",
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "urn:ietf:params:oauth:grant-type:device_code"
         ],
         "subject_types_supported": [
             "public"
         ],
         "id_token_signing_alg_values_supported": [
+            "EdDSA",
+            "RS256",
+            "RS384",
+            "RS512",
+            "ES256",
+            "ES384",
+            "ES512"
+        ],
+        "request_object_signing_alg_values_supported": [
             "RS256"
         ],
-        "claim_types_supported": [
-            "normal"
+        "token_endpoint_auth_methods_supported": [
+            "none",
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ],
+        "token_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "revocation_endpoint_auth_methods_supported": [
+            "none",
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ],
+        "revocation_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
+        ],
+        "introspection_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "private_key_jwt"
+        ],
+        "introspection_endpoint_auth_signing_alg_values_supported": [
+            "RS256"
         ],
         "claims_supported": [
             "sub",
@@ -155,18 +172,54 @@ async def oauth_authorization_server_metadata(request):
             "exp",
             "iat",
             "iss",
-            "jti",
+            "auth_time",
+            "nonce",
+            "acr",
+            "amr",
+            "c_hash",
+            "at_hash",
+            "act",
+            "scopes",
+            "client_id",
+            "azp",
+            "preferred_username",
             "name",
+            "family_name",
+            "given_name",
+            "locale",
             "email",
             "email_verified",
-            "groups",
-            "preferred_username"
+            "phone_number",
+            "phone_number_verified"
         ],
-        "request_parameter_supported": False,
-        "request_uri_parameter_supported": True,
-        "require_request_uri_registration": False,
-        "pushed_authorization_request_endpoint": f"{issuer}/api/oidc/par",
-        "require_pushed_authorization_requests": True
+        "code_challenge_methods_supported": [
+            "S256"
+        ],
+        "ui_locales_supported": [
+            "bg",
+            "cs",
+            "de",
+            "en",
+            "es",
+            "fr",
+            "hu",
+            "id",
+            "it",
+            "ja",
+            "ko",
+            "mk",
+            "nl",
+            "pl",
+            "pt",
+            "ro",
+            "ru",
+            "sv",
+            "tr",
+            "uk",
+            "zh"
+        ],
+        "request_parameter_supported": True,
+        "request_uri_parameter_supported": False
     }
     
     return JSONResponse(content=metadata, headers={
