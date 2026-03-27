@@ -65,11 +65,12 @@ src/parsers/
 ├── __init__.py      # Public exports
 ├── base.py          # BaseParser ABC, Transaction/RawTransaction models
 ├── factory.py       # ParserFactory with auto-registration
-├── westpac.py       # Westpac parser (credit card, offset account)
-├── anz.py           # ANZ parser (transactional)
-├── cba.py           # CBA parser (transactional)
-├── bankwest.py      # Bankwest parser (transactional)
-├── macquarie.py     # Macquarie parser (with rich categorization)
+├── westpac.py       # Westpac parser (credit card, offset account) [CSV]
+├── anz.py           # ANZ parser (transactional) [CSV]
+├── cba.py           # CBA parser (transactional) [CSV]
+├── bankwest.py      # Bankwest parser (transactional) [CSV]
+├── macquarie.py     # Macquarie parser (with rich categorization) [CSV]
+├── nab.py           # NAB parser (credit card, PDF statements) [PDF]
 └── [future_bank].py # Easy to add new banks
 ```
 
@@ -542,3 +543,4 @@ with db.get_session() as session:
 [2025-12-30 20:20:00 AEDT] - Added Financial Context Store pattern
 [2026-01-03 10:44:00 AEDT] - Added MCP Server Transport Pattern (Streamable HTTP)
 [2026-01-04 18:10:00 AEDT] - Added SQLAlchemy Database Access Pattern with connection pooling
+[2026-03-28 07:55:00 AEDT] - Added NAB PDF parser - first PDF-based parser using pdfplumber + regex extraction

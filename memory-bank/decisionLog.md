@@ -4,6 +4,58 @@ This file records architectural and implementation decisions.
 
 ---
 
+## [2026-03-28 07:55:00 AEDT] - NAB PDF Statement Parser (First PDF-Based Parser)
+
+### Decision
+Added a NAB credit card PDF statement parser using pdfplumber for text extraction and regex for transaction line parsing. This is the first parser that handles PDF files instead of CSV.
+
+### Context
+- User has a closed NAB Visa credit card account (Qantas Rewards Signature)
+- NAB only provides PDF statement downloads for closed accounts (no CSV export)
+- 14 monthly PDF statements covering May 2024 - Feb 2026
+- One-off historical import needed (account is closed, no ongoing imports)
+
+### Rationale
+- **pdfplumber over PyPDF2/pdfminer**: pdfplumber provides cleaner text extraction with proper spacing between columns, making regex parsing reliable
+- **Regex over table extraction**: NAB PDF tables don't have consistent cell boundaries; pdfplumber's `extract_text()` with regex is more reliable than `extract_tables()`
+- **Same BaseParser interface**: NAB parser extends BaseParser like all others, using `can_parse()` for `.pdf` detection and `parse()` for extraction
+- **Text sanitization**: PDF extraction can produce non-ASCII artifacts (e.g., `ø` as separator); `_sanitize_text()` normalizes these to ASCII
+
+### Implementation
+1. **Parser** ([`src/parsers/nab.py`](src/parsers/nab.py)):
+   - `can_parse()` checks for `.pdf` extension + `nab` in directory/filename
+   - `parse()` uses pdfplumber to extract text page-by-page
+   - Regex `TRANSACTION_LINE_RE` matches: `DD/MM/YY DD/MM/YY V{card} {details} {amount}[CR]`
+   - Handles foreign amount continuation lines (`FRGNAMT:`)
+   - `_sanitize_text()` strips non-ASCII PDF artifacts
+2. **Registration**: Added to [`factory.py`](src/parsers/factory.py) and [`__init__.py`](src/parsers/__init__.py)
+3. **Import script** ([`scripts/import_nab_statements.py`](scripts/import_nab_statements.py)): One-off CLI tool for batch import
+4. **Dependency**: Added `pdfplumber>=0.11.0` to [`requirements.txt`](requirements.txt)
+
+### Transaction Format
+| Field | Format | Example |
+|-------|--------|---------|
+| Date processed | DD/MM/YY | `07/05/24` |
+| Date of transaction | DD/MM/YY | `05/05/24` |
+| Card No | V{last4} | `V7786` |
+| Details | Concatenated merchant+location | `HUNGRYPANDAAUMELBOURNECBD` |
+| Amount | Number, CR suffix for credits | `11.74` or `186.49CR` |
+| Foreign amount | Next line | `FRGNAMT:22.00 USdollar` |
+
+### Results
+- **1,509 transactions** parsed from 14 PDF statements (12 with data, 2 empty)
+- **25 credit transactions** (payments, refunds) totaling $7,835.71 in first statement
+- **4 foreign transactions** detected with currency info
+- All imported to PostgreSQL, total DB now 3,324 transactions across 6 banks
+
+### Implications
+- Parser architecture now supports both CSV and PDF formats
+- `pdfplumber` dependency added to Docker image (needs rebuild for production)
+- NAB is a one-off import; no ongoing watcher integration needed
+- Future banks with PDF-only exports can follow the same pattern
+
+---
+
 ## [2026-01-04 18:10:00 AEDT] - SQLAlchemy Migration for Database Access
 
 ### Decision

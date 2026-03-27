@@ -12,7 +12,7 @@ A Python-based family finance management system designed to automatically import
 ## Current Status: Phase 1 Complete ✓
 
 ### What's Working
-- **5 Bank Parsers**: ANZ, Bankwest, CBA, Macquarie, Westpac
+- **6 Bank Parsers**: ANZ, Bankwest, CBA, Macquarie, NAB, Westpac
 - **Automated Import**: File watcher service monitors NAS folder
 - **PostgreSQL Storage**: 366 transactions imported and queryable
 - **Docker Deployment**: Running on LXC container via Ansible
@@ -60,13 +60,14 @@ family-finance/
 
 ## Supported Banks
 
-| Bank | Account Types | CSV Format | Notes |
-|------|---------------|------------|-------|
-| Westpac | Credit Card, Offset | Header-based, separate debit/credit | Multiple accounts per file |
-| ANZ | Transactional | Headerless, signed amounts | Single account per file |
-| CBA | Transactional | Header-based | Standard format |
-| Bankwest | Transactional | Header-based | Standard format |
-| Macquarie | Transactional | Header-based | Rich categorization included |
+| Bank | Account Types | Format | Notes |
+|------|---------------|--------|-------|
+| Westpac | Credit Card, Offset | CSV: Header-based, separate debit/credit | Multiple accounts per file |
+| ANZ | Transactional | CSV: Headerless, signed amounts | Single account per file |
+| CBA | Transactional | CSV: Header-based | Standard format |
+| Bankwest | Transactional | CSV: Header-based | Standard format |
+| Macquarie | Transactional | CSV: Header-based | Rich categorization included |
+| NAB | Credit Card (Visa) | PDF: pdfplumber text extraction + regex | Closed account, one-off import |
 
 ## Data Model
 

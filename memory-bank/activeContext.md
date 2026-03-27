@@ -9,9 +9,10 @@ This file tracks the project's current status, including recent changes, current
 * **Phase 3 Complete**: Financial Context Store for better categorization
 * **Phase 4 Complete**: IBKR Investment Portfolio Integration
 * **Phase 5 Complete**: Westpac Bank Scraper for automated CSV downloads
+* **NEW**: NAB PDF statement parser added (6th bank supported)
 * System is running in production on LXC container
-* 768 transactions imported from 5 banks
-* MCP server exposing 12 tools for AI-powered reporting
+* 3,324 transactions imported from 6 banks (including 1,509 NAB)
+* MCP server exposing 13 tools for AI-powered reporting
 * Report generator using financial context for enriched categorization
 * Monthly reports include IBKR investment portfolio data
 * **NEW**: Westpac scraper runs daily at 6am to auto-download transactions
@@ -106,12 +107,13 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 
 | Bank | Transactions | Account Types |
 |------|--------------|---------------|
-| Westpac | 313 | Credit card, Savings |
+| NAB | 1,509 | Credit card (Visa) |
+| Westpac | 1,360 | Credit card, Savings |
 | Macquarie | 217 | Transaction |
 | ANZ | 98 | Transaction |
 | CBA | 88 | Transaction |
 | Bankwest | 52 | Transaction |
-| **Total** | **768** | Oct 2021 - Dec 2025 |
+| **Total** | **3,324** | Oct 2021 - Mar 2026 |
 
 ## Recent Changes
 
@@ -170,6 +172,11 @@ SELECT * FROM transactions WHERE date >= '2025-11-01' ORDER BY date;
 * [2026-01-04 18:10:00 AEDT] - Added connection pooling (pool_size=5, max_overflow=10, pool_pre_ping=True)
 * [2026-01-04 18:10:00 AEDT] - Hybrid approach: SQLAlchemy sessions with raw SQL via text() for complex queries
 * [2026-01-04 18:10:00 AEDT] - All 13 MCP tools verified working after deployment
+* [2026-03-28 07:55:00 AEDT] - **NAB PDF Parser**: Added 6th bank parser for NAB credit card PDF statements
+* [2026-03-28 07:55:00 AEDT] - First PDF-based parser (all others are CSV); uses pdfplumber for text extraction
+* [2026-03-28 07:55:00 AEDT] - Imported 1,509 transactions from 14 PDF statements (12 with data, 2 empty)
+* [2026-03-28 07:55:00 AEDT] - Total database now 3,324 transactions across 6 banks
+* [2026-03-28 07:55:00 AEDT] - Created one-off import script: `scripts/import_nab_statements.py`
 
 ## Key Files
 

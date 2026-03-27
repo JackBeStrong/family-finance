@@ -264,12 +264,14 @@ def register_default_parsers():
     from .bankwest import BankwestParser
     from .cba import CBAParser
     from .macquarie import MacquarieParser
+    from .nab import NABParser
     
     ParserFactory.register(WestpacParser)
     ParserFactory.register(ANZParser)
     ParserFactory.register(BankwestParser)
     ParserFactory.register(CBAParser)
     ParserFactory.register(MacquarieParser)
+    ParserFactory.register(NABParser)
 
 
 # Auto-register default parsers when module is imported

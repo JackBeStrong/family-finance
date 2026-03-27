@@ -1,5 +1,7 @@
 # Progress
 
+[2026-03-28 07:55:00 AEDT] - **NAB PDF Parser Complete**: Added 6th bank parser for NAB credit card PDF statements. 1,509 transactions imported from 14 PDF statements. First PDF-based parser using pdfplumber.
+
 [2026-01-04 18:10:00 AEDT] - **SQLAlchemy Migration Complete**: Migrated from raw psycopg2 to SQLAlchemy with connection pooling, fixing "aborted transaction" errors
 
 [2025-12-31 19:37:00 AEDT] - Added fail-safe lock mechanism to Westpac scraper to prevent account lockouts from repeated failed login attempts
@@ -46,9 +48,9 @@ This file tracks the project's progress using a task list format.
 | NFS Mount | Unraid NAS | ✓ Mounted |
 
 ### Data
-- **Total Transactions**: 768
-- **Banks Supported**: 5 (ANZ, Bankwest, CBA, Macquarie, Westpac)
-- **Date Range**: Oct 2021 - Dec 2025
+- **Total Transactions**: 3,324
+- **Banks Supported**: 6 (ANZ, Bankwest, CBA, Macquarie, NAB, Westpac)
+- **Date Range**: May 2024 - Mar 2026
 
 ## Deployment Commands
 
