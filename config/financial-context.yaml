@@ -150,6 +150,38 @@ accounts:
     notes: "Used for rent payments only"
 
 # -----------------------------------------------------------------------------
+# INVESTMENT ACCOUNTS (Interactive Brokers)
+# -----------------------------------------------------------------------------
+# IBKR brokerage accounts for US stock/ETF investments.
+# Data is queried via the IBKR MCP server using Flex Query API.
+# Each account has its own Flex Web Service token and Flex Query ID.
+
+investment_accounts:
+  - id: ibkr_account_1
+    broker: "Interactive Brokers"
+    account_id: "U22976279"
+    account_name: "Junzhou An and Baozhu Fan"
+    account_type: "Joint"
+    currency: "USD"
+    date_opened: "2025-11-13"
+    flex_query_id: "1359561"
+    flex_query_name: "reporting1"
+    strategy: "Concentrated ETF (QQQM + SOXX)"
+    notes: "Large safe money investment"
+
+  - id: ibkr_account_2
+    broker: "Interactive Brokers"
+    account_id: "U13494789"
+    account_name: "Huaizhi Zhou"
+    account_type: "Individual"
+    currency: "USD"
+    date_opened: "2023-12-03"
+    flex_query_id: "1481606"
+    flex_query_name: "reporting2"
+    strategy: "Diversified individual stocks (tech-heavy)"
+    notes: "Monthly AUD DCA (~$1,500-3,000/month). Holdings: AMD, AMZN, ARM, ASTS, CHAT, CRWV, DXYZ, FIG, MSFT, MU, NFLX, PLTR, RDDT, RKLB, TEAM, TSLA."
+
+# -----------------------------------------------------------------------------
 # PROPERTY PORTFOLIO
 # -----------------------------------------------------------------------------
 # Define properties for mortgage and rental income tracking.
